@@ -26,18 +26,22 @@ from llada.generate import generate  # noqa: E402
 
 
 # ProSeCo Max hyperparameters from Table 3 of the paper (2602.11590 v3):
+# gen_length=1024, block_length=32, 1 token/step => steps=1024 (32 per block × 32 blocks).
+# ProSeCo's `steps` param must be divisible by num_blocks (=32), so 1024 is the fit.
+# Average NFEs from Table 3 (343/499/818) are OUTPUT metrics after early-EOS stopping,
+# not the input `steps` value.
 BENCHMARK_CONFIG = {
     "gsm8k": {
-        "apply_corrector_every_n_steps": 2,   # ω
+        "apply_corrector_every_n_steps": 2,   # ω (Table 3 GSM8K Max)
         "max_corrector_steps_per_loop": 1,    # S (Table 3 GSM8K Max)
-        "steps": 343,
+        "steps": 1024,
         "gen_length": 1024,
         "block_length": 32,
     },
     "humaneval": {
-        "apply_corrector_every_n_steps": 2,   # ω
+        "apply_corrector_every_n_steps": 2,   # ω (Table 3 HumanEval Max)
         "max_corrector_steps_per_loop": 4,    # S (Table 3 HumanEval Max)
-        "steps": 500,                          # ~499 per Table 3
+        "steps": 1024,
         "gen_length": 1024,
         "block_length": 32,
     },
