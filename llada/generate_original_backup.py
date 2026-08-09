@@ -14,8 +14,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # Modified from LLaDA repos: https://github.com/ML-GSAI/LLaDA
-# S1 INSTRUMENTATION ADDED 2026-08-08 for Lucas Hendren's per-block-ω variance study.
-# See s1/README.md for the L1 hypothesis this data is designed to test.
 import torch
 import torch.nn.functional as F
 from torch.cuda import nvtx
@@ -50,11 +48,15 @@ def get_num_transfer_tokens(block_mask_index: torch.Tensor, steps: int) -> torch
     base  = torch.div(total, steps, rounding_mode="floor")  # (B,)
     rem   = total - base * steps                         # (B,)
 
-    step_idx = torch.arange(steps, device=device)        # (S,)
-    result = base.unsqueeze(1).expand(-1, steps).contiguous().to(dtype)   # (B, S)
-    # Distribute remainder to the first `rem` steps for each batch element
-    result += (step_idx.unsqueeze(0) < rem.unsqueeze(1)).to(dtype)
-    return result
+    # Start with base for all steps
+    num_transfer_tokens = base.unsqueeze(1).expand(-1, steps).to(dtype)  # (B, steps)
+
+    # Add +1 to the first `rem[b]` steps for each batch b — without tensor slicing
+    cols = torch.arange(steps, device=device).unsqueeze(0)               # (1, steps)
+    add_mask = cols < rem.unsqueeze(1)                                   # (B, steps)
+    num_transfer_tokens = num_transfer_tokens + add_mask.to(dtype)       # (B, steps)
+
+    return num_transfer_tokens
 
 
 @torch.no_grad()
@@ -74,7 +76,6 @@ def generate(
     tokenizer=None,
     disable_pbar=True,
     save_intermediate_outputs=False,
-    s1_log=None,  # S1 INSTRUMENTATION: pass a list to append per-corrector-invocation records
 ):
     """Semi-autoregressive masked diffusion generation with corrector refinement.
 
@@ -83,26 +84,6 @@ def generate(
     subset is committed based on confidence ranking (or a threshold). An optional
     corrector refines predictions via fixed-point iterations over all tokens
     generated so far.
-
-    S1 INSTRUMENTATION (2026-08-08): when `s1_log` is a list, append one dict per
-    corrector invocation with keys:
-      block_idx (int): which block (0..num_blocks-1) the corrector fired in
-      step_in_block (int): which decode step within the block triggered it
-      corrector_break_step (int): the corrector loop iteration that broke (1..max)
-      hit_max (bool): True if the loop exhausted max_corrector_steps_per_loop
-      broke_at_step_1 (bool): True if the corrector converged on the first iteration
-         (this is the "correction was a no-op" signal — first iteration produced
-          the same tokens as the seed argmax, so the corrector added nothing)
-      active_mask_size (int): number of still-masked positions in the corrector's
-         active region at the time of invocation
-      pre_correction_argmax_tokens_on_active (list[int]): argmax tokens on the
-         still-masked positions BEFORE the corrector ran (for post-hoc
-         "did-correction-actually-change-committed-tokens" analysis)
-      post_correction_tokens_on_active (list[int]): tokens on the same positions
-         AFTER the corrector loop finished
-
-    Everything else in this function is byte-identical to the original ProSeCo
-    generate(). If s1_log is None, this is a no-op.
 
     Args:
         model: Masked diffusion language model whose forward pass returns an
@@ -127,7 +108,6 @@ def generate(
         disable_pbar: If True, suppress the progress bar.
         save_intermediate_outputs: If True, record the sequence state after each
             step.
-        s1_log: If a list, append per-corrector-invocation records to it (see above).
 
     Returns:
         Tuple of ``(x, metrics, intermediate_outputs)`` where
@@ -205,19 +185,9 @@ def generate(
                         x[:, active_region_start:block_end][~active_mask]
                     )
                     applied_corrector = True
-
-                    # S1: snapshot the pre-correction argmax on the active region
-                    # (positions the corrector might change)
-                    s1_pre_argmax = None
-                    if s1_log is not None:
-                        s1_pre_argmax = corrector_x[
-                            :, active_region_start:block_end
-                        ].clone()
                 else:
                     corrector_x, corrector_logits = None, None
-                    s1_pre_argmax = None
 
-                s1_broke_at_step_1 = False
                 while corrector_step < max_corrector_steps_per_loop:
                     corrector_step += 1
                     corrector_nfe += 1
@@ -236,10 +206,6 @@ def generate(
                         corrector_x[:, active_region_start:block_end],
                         corrected_tokens,
                     ):
-                        # S1: convergence on iteration 1 == the corrector did nothing
-                        # (produced the same tokens as the seed argmax it was given)
-                        if corrector_step == 1:
-                            s1_broke_at_step_1 = True
                         break
                     corrector_x[:, active_region_start:block_end] = corrected_tokens
 
@@ -250,33 +216,6 @@ def generate(
                     x[:, active_region_start:block_end][~active_mask] = (
                         corrected_tokens[~active_mask]
                     )
-
-                    # S1: log this invocation
-                    if s1_log is not None:
-                        # Compute what the corrector actually changed on the ACTIVE
-                        # (still-masked-going-into-this-step) positions vs. the
-                        # pre-correction seed. This is the "did correction earn
-                        # its keep?" signal.
-                        s1_post = corrector_x[:, active_region_start:block_end]
-                        # Restrict to active-mask positions (the corrector's
-                        # freedom to modify was elsewhere restored to committed)
-                        active_flat = active_mask.flatten().tolist()
-                        pre_flat = s1_pre_argmax.flatten().tolist()
-                        post_flat = s1_post.flatten().tolist()
-                        n_active_changed = sum(
-                            1 for a, p, q in zip(active_flat, pre_flat, post_flat)
-                            if a and (p != q)
-                        )
-                        n_active = sum(active_flat)
-                        s1_log.append({
-                            "block_idx": int(block_idx),
-                            "step_in_block": int(step),
-                            "corrector_break_step": int(corrector_step),
-                            "hit_max": bool(corrector_step >= max_corrector_steps_per_loop),
-                            "broke_at_step_1": bool(s1_broke_at_step_1),
-                            "active_mask_size": int(n_active),
-                            "n_active_positions_changed_by_corrector": int(n_active_changed),
-                        })
 
             # --- Select which tokens to unmask this step ---
             x0, transfer_index = get_transfer_index(
