@@ -108,10 +108,11 @@ def _patch_llada_for_bnb(checkpoint):
         pretrained_model_name_or_path=checkpoint,
     )
     if not hasattr(model_class, "all_tied_weights_keys"):
-        # Empty list means "no tied weights to preserve during quantization" —
-        # bnb's get_keys_to_not_convert will skip its `if len(...) > 0` branch cleanly.
-        model_class.all_tied_weights_keys = []
-        print(f"[s1] patched {model_class.__name__}.all_tied_weights_keys = []")
+        # Empty DICT (not list) — transformers 5.x uses `.keys()` on this in
+        # modeling_utils.get_total_byte_count (~line 5100), so it must be a mapping.
+        # bnb's `if len(...) > 0` check also works on empty dict → skips cleanly.
+        model_class.all_tied_weights_keys = {}
+        print(f"[s1] patched {model_class.__name__}.all_tied_weights_keys = {{}}")
 
 
 def run(args):
