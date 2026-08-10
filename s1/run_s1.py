@@ -88,6 +88,32 @@ def load_benchmark(name, n_samples, seed=0):
         raise ValueError(f"unknown benchmark {name}")
 
 
+def _patch_llada_for_bnb(checkpoint):
+    """LLaDA's custom modeling_llada.py exposes `_tied_weights_keys` (old HF API).
+    Transformers >=5.x's bitsandbytes quantizer calls `all_tied_weights_keys` (new API).
+    Patch the class to add the missing attribute before quantized load.
+    """
+    from transformers import AutoConfig
+    from transformers.dynamic_module_utils import get_class_from_dynamic_module
+
+    config = AutoConfig.from_pretrained(checkpoint, trust_remote_code=True)
+    auto_map = getattr(config, "auto_map", {}) or {}
+    class_ref = auto_map.get("AutoModel") or auto_map.get("AutoModelForCausalLM")
+    if not class_ref:
+        print(f"[s1] warning: no auto_map found on {checkpoint}, skipping patch")
+        return
+
+    model_class = get_class_from_dynamic_module(
+        class_reference=class_ref,
+        pretrained_model_name_or_path=checkpoint,
+    )
+    if not hasattr(model_class, "all_tied_weights_keys"):
+        # Empty list means "no tied weights to preserve during quantization" —
+        # bnb's get_keys_to_not_convert will skip its `if len(...) > 0` branch cleanly.
+        model_class.all_tied_weights_keys = []
+        print(f"[s1] patched {model_class.__name__}.all_tied_weights_keys = []")
+
+
 def run(args):
     device = "cuda"
     print(f"[s1] loading checkpoint: {args.checkpoint}  (quantize={args.quantize})")
@@ -96,6 +122,9 @@ def run(args):
     # int8 quantization via bitsandbytes drops to ~8GB, comfortable fit on T4, with
     # <1% argmax-output shift on inference. int4 drops further to ~4GB but has larger
     # shift that would bias S1's per-block corrector-usefulness measurements.
+    if args.quantize in ("int8", "int4"):
+        _patch_llada_for_bnb(args.checkpoint)
+
     if args.quantize == "int8":
         from transformers import BitsAndBytesConfig
         quant = BitsAndBytesConfig(load_in_8bit=True)
