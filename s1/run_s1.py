@@ -90,12 +90,42 @@ def load_benchmark(name, n_samples, seed=0):
 
 def run(args):
     device = "cuda"
-    print(f"[s1] loading checkpoint: {args.checkpoint}")
-    model = AutoModel.from_pretrained(
-        args.checkpoint,
-        trust_remote_code=True,
-        torch_dtype=torch.bfloat16,
-    ).to(device).eval()
+    print(f"[s1] loading checkpoint: {args.checkpoint}  (quantize={args.quantize})")
+
+    # LLaDA-8B in bfloat16 = ~16GB weights, which does not fit on Tesla T4 (15.6GB VRAM).
+    # int8 quantization via bitsandbytes drops to ~8GB, comfortable fit on T4, with
+    # <1% argmax-output shift on inference. int4 drops further to ~4GB but has larger
+    # shift that would bias S1's per-block corrector-usefulness measurements.
+    if args.quantize == "int8":
+        from transformers import BitsAndBytesConfig
+        quant = BitsAndBytesConfig(load_in_8bit=True)
+        model = AutoModel.from_pretrained(
+            args.checkpoint,
+            trust_remote_code=True,
+            quantization_config=quant,
+            device_map={"": 0},  # single-GPU placement; accelerate handles the rest
+        ).eval()
+    elif args.quantize == "int4":
+        from transformers import BitsAndBytesConfig
+        quant = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_compute_dtype=torch.bfloat16,
+            bnb_4bit_quant_type="nf4",
+        )
+        model = AutoModel.from_pretrained(
+            args.checkpoint,
+            trust_remote_code=True,
+            quantization_config=quant,
+            device_map={"": 0},
+        ).eval()
+    else:
+        # bfloat16, full precision — requires >16GB VRAM
+        model = AutoModel.from_pretrained(
+            args.checkpoint,
+            trust_remote_code=True,
+            torch_dtype=torch.bfloat16,
+        ).to(device).eval()
+
     tokenizer = AutoTokenizer.from_pretrained(
         args.checkpoint, trust_remote_code=True,
     )
@@ -172,5 +202,12 @@ if __name__ == "__main__":
     )
     p.add_argument("--n_samples_per_benchmark", type=int, default=200)
     p.add_argument("--out_dir", default="s1/runs")
+    p.add_argument(
+        "--quantize",
+        default="int8",
+        choices=["int8", "int4", "none"],
+        help="int8 (default, ~8GB VRAM, fits T4); int4 (~4GB, may bias S1 signal); "
+             "none (bfloat16, needs ~16GB VRAM, e.g., A10G/L4/A100).",
+    )
     args = p.parse_args()
     run(args)

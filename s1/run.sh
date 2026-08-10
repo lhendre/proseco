@@ -14,6 +14,7 @@ CHECKPOINT="${CHECKPOINT:-kuleshov-group/proseco-llada-sft}"
 N_SAMPLES="${N_SAMPLES:-200}"
 BENCHMARKS="${BENCHMARKS:-gsm8k humaneval}"
 OUT_DIR="${OUT_DIR:-s1/runs}"
+QUANTIZE="${QUANTIZE:-int8}"  # int8 required for T4 (16GB VRAM); bfloat16 needs 24GB+
 
 # ---- env sanity ----
 echo "[s1] python: $(python --version)"
@@ -26,12 +27,13 @@ python -c "import torch; print(f'  cuda={torch.cuda.is_available()} device_count
 
 mkdir -p "$OUT_DIR"
 
-echo "[s1] running: checkpoint=$CHECKPOINT n=$N_SAMPLES benchmarks=$BENCHMARKS"
+echo "[s1] running: checkpoint=$CHECKPOINT n=$N_SAMPLES benchmarks=$BENCHMARKS quantize=$QUANTIZE"
 python s1/run_s1.py \
     --checkpoint "$CHECKPOINT" \
     --n_samples_per_benchmark "$N_SAMPLES" \
     --benchmarks $BENCHMARKS \
-    --out_dir "$OUT_DIR"
+    --out_dir "$OUT_DIR" \
+    --quantize "$QUANTIZE"
 
 echo "[s1] analyzing..."
 python s1/analyze.py "$OUT_DIR"
