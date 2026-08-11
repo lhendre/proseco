@@ -211,7 +211,14 @@ def run(args):
                         f"invocations={len(s1_log)} nfe={metrics['total_nfe']} "
                         f"wall={dt:.1f}s"
                     )
+                # Fragmentation defense: empty cache periodically so long runs
+                # don't accumulate reserved-but-unallocated blocks that starve later
+                # bnb quantization ops (see 2026-08-10 debug: smoke int8 OOM after ~50min).
+                if (i + 1) % 5 == 0:
+                    torch.cuda.empty_cache()
         print(f"[s1] done {bench_name}, wrote {out_path}")
+        torch.cuda.empty_cache()  # between benchmarks
+        import gc; gc.collect()
 
     print(f"[s1] all done. run: python s1/analyze.py {out_dir}")
 
