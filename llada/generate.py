@@ -75,6 +75,9 @@ def generate(
     disable_pbar=True,
     save_intermediate_outputs=False,
     s1_log=None,  # S1 INSTRUMENTATION: pass a list to append per-corrector-invocation records
+    corrector_policy=None,  # Phase B: None = fixed schedule (default); or an object
+                            # with .should_invoke(features_dict)->bool that decides per-invocation.
+                            # See l1_policy.py for L1Policy / CadLLMLinearPolicy.
 ):
     """Semi-autoregressive masked diffusion generation with corrector refinement.
 
@@ -189,8 +192,23 @@ def generate(
             global_mask[:, block_end:] = False
             active_mask = global_mask[:, active_region_start:block_end]
 
+            # --- Corrector-entry decision ---
+            # Default (corrector_policy=None): the original ProSeCo fixed schedule.
+            # Phase B: an adaptive policy (L1 MLP or CadLLM-linear) that inspects
+            # the predictor's confidence distribution over active-mask positions.
+            if corrector_policy is None:
+                invoke_corrector = (step + 1) % apply_corrector_every_n_steps == 0
+                phase_b_features = None
+            else:
+                # Lazy import so pure-inference paths don't need the policy module.
+                from l1_policy import features_from_predictor_logits
+                phase_b_features = features_from_predictor_logits(
+                    logits, active_mask, active_region_start, block_end,
+                )
+                invoke_corrector = corrector_policy.should_invoke(phase_b_features)
+
             # --- Corrector steps (fixed-point iteration) ---
-            if (step + 1) % apply_corrector_every_n_steps == 0:
+            if invoke_corrector:
                 corrector_step = 0
 
                 if max_corrector_steps_per_loop > 0:
@@ -209,13 +227,41 @@ def generate(
                     # S1: snapshot the pre-correction argmax on the active region
                     # (positions the corrector might change)
                     s1_pre_argmax = None
+                    s1_predictor_conf = None
                     if s1_log is not None:
                         s1_pre_argmax = corrector_x[
                             :, active_region_start:block_end
                         ].clone()
+                        # S1 v2 (2026-08-14): log predictor confidence + entropy so L1's
+                        # sample-adaptive-features can be regressed against usefulness
+                        # to prove L1 has residual moat over confidence-linear baselines
+                        # (CadLLM-style). Compute on the block slice of predictor logits
+                        # *before* the corrector overwrites them at line 248.
+                        with torch.no_grad():
+                            pl = logits[:, active_region_start:block_end].float()
+                            pp = torch.softmax(pl, dim=-1)
+                            top1 = pp.max(dim=-1).values.reshape(-1)
+                            ent = -(pp.clamp_min(1e-12).log() * pp).sum(dim=-1).reshape(-1)
+                            am = active_mask.reshape(-1).bool()
+                            if am.any():
+                                top1_a = top1[am]
+                                ent_a = ent[am]
+                                s1_predictor_conf = {
+                                    "predictor_conf_mean_active": float(top1_a.mean()),
+                                    "predictor_conf_min_active": float(top1_a.min()),
+                                    "predictor_conf_max_active": float(top1_a.max()),
+                                    "predictor_conf_std_active": float(top1_a.std()) if top1_a.numel() > 1 else 0.0,
+                                    "predictor_entropy_mean_active": float(ent_a.mean()),
+                                    "predictor_entropy_max_active": float(ent_a.max()),
+                                    "predictor_conf_mean_block": float(top1.mean()),
+                                    "predictor_entropy_mean_block": float(ent.mean()),
+                                }
+                            else:
+                                s1_predictor_conf = {}
                 else:
                     corrector_x, corrector_logits = None, None
                     s1_pre_argmax = None
+                    s1_predictor_conf = None
 
                 s1_broke_at_step_1 = False
                 while corrector_step < max_corrector_steps_per_loop:
@@ -268,7 +314,7 @@ def generate(
                             if a and (p != q)
                         )
                         n_active = sum(active_flat)
-                        s1_log.append({
+                        rec = {
                             "block_idx": int(block_idx),
                             "step_in_block": int(step),
                             "corrector_break_step": int(corrector_step),
@@ -276,7 +322,10 @@ def generate(
                             "broke_at_step_1": bool(s1_broke_at_step_1),
                             "active_mask_size": int(n_active),
                             "n_active_positions_changed_by_corrector": int(n_active_changed),
-                        })
+                        }
+                        if s1_predictor_conf:
+                            rec.update(s1_predictor_conf)
+                        s1_log.append(rec)
 
             # --- Select which tokens to unmask this step ---
             x0, transfer_index = get_transfer_index(
