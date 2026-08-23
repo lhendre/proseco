@@ -99,11 +99,17 @@ def load_benchmark(name: str, n: int, seed: int = 0, held_out: bool = True):
 
 
 def gsm8k_answer_match(text: str, gold: str) -> bool:
-    """Extract \\boxed{N} from generation and compare to gold's final number."""
-    m = re.search(r"\\boxed\{([^}]*)\}", text)
-    if not m:
+    """Extract the LAST \\boxed{N} from generation and compare to gold's final number.
+
+    Uses last-match not first-match: CoT generations can put an intermediate wrong
+    number in \\boxed{} and self-correct later. First-match silently scores the
+    intermediate one and returns False when the final answer is right (or vice versa).
+    Per L1_AUDIT_FINDINGS.md finding #2 (agent audit 2026-08-23).
+    """
+    matches = list(re.finditer(r"\\boxed\{([^}]*)\}", text))
+    if not matches:
         return False
-    pred = m.group(1).strip().replace(",", "").replace("$", "")
+    pred = matches[-1].group(1).strip().replace(",", "").replace("$", "")
     m2 = re.search(r"####\s*([-+]?[0-9.,]+)", gold)
     if not m2:
         return False
@@ -179,6 +185,10 @@ def run_one(model, tokenizer, sample: dict, bench: str, policy_spec: str,
         "corrector_nfe": int(metrics["corrector_nfe"]),
         "wall_s": float(dt),
         "gen_len": len(gen),
+        # Save full generation for post-hoc re-scoring if the eval function changes.
+        # Truncated at 4096 chars to keep JSONL manageable — enough for GSM8K CoT and
+        # HumanEval code.
+        "gen_text": gen[:4096],
     }
 
 
@@ -187,22 +197,21 @@ def main():
     p.add_argument("--checkpoint", default="kuleshov-group/proseco-llada-sft")
     p.add_argument("--quantize", default="int8", choices=["int8", "int4", "none"])
     p.add_argument("--benchmarks", nargs="+", default=["gsm8k", "humaneval"])
-    p.add_argument("--n_samples", type=int, default=40)
+    # Defaults match PHASE_B_PREREG_2026-08-22.md. Do not change these to
+    # accommodate a specific run — pass overrides via CLI. Agent audit finding
+    # #1 (2026-08-23): stale defaults silently drop l1_mlp:0.40 and undersize N.
+    p.add_argument("--n_samples", type=int, default=100)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--weights", default="/home/ec2-user/proseco/l1_weights.json")
     p.add_argument("--out", default="/home/ec2-user/proseco/phase_b/pilot.jsonl")
     p.add_argument(
         "--policies", nargs="+",
         default=[
-            "fixed",  # ProSeCo default schedule
-            # CadLLM-linear at three thresholds — sweeps NFE budget
+            "fixed",
+            "cadllm_linear:0.15",
             "cadllm_linear:0.20",
-            "cadllm_linear:0.30",
-            "cadllm_linear:0.40",
-            # L1 MLP at three thresholds — sweeps NFE budget
-            "l1_mlp:0.35",
-            "l1_mlp:0.50",
-            "l1_mlp:0.65",
+            "cadllm_linear:0.25",
+            "l1_mlp:0.40",
         ],
     )
     args = p.parse_args()

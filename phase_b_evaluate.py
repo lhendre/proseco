@@ -20,8 +20,39 @@ from collections import defaultdict
 import numpy as np
 
 
-def load(path: str) -> list[dict]:
-    return [json.loads(l) for l in open(path)]
+def load(path: str, rescore: bool = True) -> list[dict]:
+    """Load rows. If rescore=True and the row has a gen_text field, re-score
+    correctness with the CURRENT evaluator (post-hoc bug-fix rescue path).
+    Rows without gen_text keep their original correct value."""
+    rows = [json.loads(l) for l in open(path)]
+    if not rescore:
+        return rows
+    # Lazy import so this file has no torch dep for offline analysis
+    from phase_b_pilot import evaluate_generation
+    # We need golds; reload from the datasets since we don't stash them in the JSONL.
+    # This is slow-ish (one HF dataset load), but analysis is offline.
+    from phase_b_pilot import load_benchmark
+    gold_by_id: dict[str, tuple] = {}
+    for bench in {r["benchmark"] for r in rows}:
+        # Load ENOUGH samples to cover any id we might see (held-out span).
+        # Both training pool and held-out are within test-split — grab a superset.
+        for held_out in (True, False):
+            try:
+                for s in load_benchmark(bench, 200, held_out=held_out):
+                    gold_by_id[s["id"]] = (s["gold"], bench)
+            except (AssertionError, Exception):
+                pass  # ok if we can't cover both; whatever's loaded is fine
+    n_rescored = 0
+    for r in rows:
+        if "gen_text" in r and r["id"] in gold_by_id:
+            gold, bench = gold_by_id[r["id"]]
+            new = evaluate_generation(r["gen_text"], gold, bench)
+            if new != r["correct"]:
+                n_rescored += 1
+            r["correct"] = new
+    if n_rescored:
+        print(f"[eval] re-scored {n_rescored}/{len(rows)} rows with updated evaluator")
+    return rows
 
 
 def index_by_id(rs: list[dict]) -> dict[str, dict]:
