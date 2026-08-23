@@ -395,3 +395,98 @@ closing brace) instead of `[^}]*`, and re-run `gsm8k_answer_match` against
 any already-collected `gen_text` rows to check how many contain
 `\boxed{\frac` or similar nested patterns before trusting the current
 accuracy table.
+
+---
+
+## 2026-08-23 — Track B audit (fire N+3, commit c83fb41 reviewed)
+
+Status check on findings #1-#7 against current file contents (not commit
+messages), then one new finding from re-reading `l1_policy.py` against how
+`phase_b_pilot.py` and `llada/generate.py` actually call it.
+
+**Re-verified status:**
+- #1 (stale CLI defaults) — **fixed**. `phase_b_pilot.py` now defaults
+  `--n_samples 100` and `--policies` to the exact locked-prereg list
+  (`fixed`, `cadllm_linear:0.15/0.20/0.25`, `l1_mlp:0.40`), with a comment
+  pointing at this finding.
+- #2 (first-`\boxed{}`-match) — **fixed**. `gsm8k_answer_match` now takes
+  `matches[-1]` with a docstring citing this finding.
+- #3 (unenforced train/test index invariant) — **still open**, unchanged.
+- #4 (checkpoint/early-stop selection bias on `final_test_auc`) — **still
+  open**. `l1_training.py` is unchanged: same `Xte`/`yte_np` used for
+  `best_auc` selection, `patience`-driven early stop, and the reported
+  `final_test_auc`. No val/test split added.
+- #5 (broad `except (AssertionError, Exception)` in `phase_b_evaluate.py`
+  swallowing rescore failures silently) — **still open**, unchanged.
+- #6 (byte-identical duplicate `s1/runs/*.jsonl` files, unfiltered glob
+  loads each 2-3x, overweights those prompts in `l1_weights.json`'s
+  training loss) — **still open**. Confirmed via `ls s1/runs/`: all the
+  same duplicate-named files from finding #6 are still committed, and
+  `load_records()` in `l1_training.py` still has no dedup by content hash
+  or by `(sample_id, block_idx, step_in_block)`. This is the same
+  `l1_weights.json` behind the live `l1_mlp:0.40` EC2 pilot arm — not
+  re-paging since this was already flagged via PushNotification when
+  found (fire N+2) and nothing about it has changed since, but noting it
+  is still unresolved going into whatever pilot results land next.
+- #7 (`\boxed{}` regex doesn't handle nested braces, e.g. `\frac{}`) —
+  **still open**, unchanged regex (`r"\\boxed\{([^}]*)\}"`).
+
+### 8. LOW/MEDIUM — `FixedPolicy` (in `l1_policy.py`) implements the wrong
+interface for how `generate.py` actually calls a non-`None` `corrector_policy`
+— currently harmless only because `phase_b_pilot.py` special-cases around it
+
+`llada/generate.py`'s corrector-entry decision (lines 199-208) has exactly
+two branches:
+
+```python
+if corrector_policy is None:
+    invoke_corrector = (step + 1) % apply_corrector_every_n_steps == 0
+    phase_b_features = None
+else:
+    phase_b_features = features_from_predictor_logits(...)
+    invoke_corrector = corrector_policy.should_invoke(phase_b_features)
+```
+
+Any non-`None` `corrector_policy` object gets `.should_invoke(features_dict)`
+called on it. But `l1_policy.py`'s `FixedPolicy` class does **not** define
+`should_invoke` — it only defines `should_invoke_at_step(step_in_block)`,
+a different name and signature (ignores features, takes a step index
+instead). `load_policy("fixed")` (and `load_policy("fixed:N")`) both return
+a `FixedPolicy` instance. If that instance were ever passed as
+`corrector_policy=` to `generate()`, the very first predictor step would
+raise `AttributeError: 'FixedPolicy' object has no attribute 'should_invoke'`.
+
+**Why the pilot doesn't hit this today:** `phase_b_pilot.py`'s `run_one`
+(line 156-158) special-cases it away —
+`policy_obj = None; if policy_spec != "fixed": policy_obj = load_policy(...)`
+— so the `fixed` arm always passes `corrector_policy=None` and takes the
+first branch, never touching `FixedPolicy` at all. `FixedPolicy` is
+currently dead code from the pilot's perspective: constructible via
+`load_policy`, but never actually exercised through `generate()`, and would
+crash immediately if it were.
+
+**Secondary, non-crashing consequence of the current workaround:** because
+the `fixed` arm takes the `corrector_policy is None` branch, it skips the
+`features_from_predictor_logits` call entirely, while `cadllm_linear` and
+`l1_mlp` both pay for it every predictor step. That's a small extra amount
+of per-step tensor work (softmax + entropy over the active block region)
+that only the two adaptive arms incur. Doesn't affect `total_nfe` /
+`predictor_nfe` (no extra model forward passes, pure post-hoc tensor ops on
+already-computed logits) so it shouldn't move the accuracy-vs-matched-NFE
+comparison, but if wall-clock/throughput is ever reported per policy, the
+`fixed` arm has a structural head start unrelated to its actual decision
+rule.
+
+**Recommend:** either give `FixedPolicy` a `should_invoke(features)` method
+(ignoring `features`, delegating to an internally-tracked step counter) so
+it's actually usable as a drop-in `corrector_policy` and the `run_one`
+special-case can be removed (one code path for all three arms, matching
+this audit brief's fair-comparison goal (c) more literally), or — if the
+special-case in `run_one` is intentionally kept as the fast path for
+`fixed` — delete/rename `should_invoke_at_step` and add a comment on
+`FixedPolicy` noting it's not wired into `generate()`'s `corrector_policy`
+protocol and would need `should_invoke` to be. Low urgency (nothing is
+broken today, this doesn't touch the current pilot's data), but it's an
+interface mismatch that would produce a loud crash — not a silent wrong
+number — for the next person who assumes `load_policy("fixed")` is a
+plug-compatible `corrector_policy` for `generate()`.
