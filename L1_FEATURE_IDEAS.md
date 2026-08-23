@@ -210,3 +210,113 @@ feature failed. This is squarely a "propose, do not implement" item per the
 routine brief — flagging the priority-vs-#1-#3 question for whoever picks
 this up: probably lowest priority of the four, precisely because its failure
 mode is already documented history here rather than speculative.
+
+---
+
+## 2026-08-23 — Track C, third pass: two features not on the routine brief's list
+
+The prior two entries cover all four motivations named in the routine
+brief's candidate list (rank, historical agreement, pooled-vocab entropy,
+block-position). Re-reading `features_from_predictor_logits`
+(`l1_policy.py:102-135`) for this pass instead of the brief's list, looking
+for signal shapes the current 5 features and the 4 already-logged proposals
+both miss. Two candidates, both pure functions of `pp` already in scope —
+same cheapest cost class as idea #3 above, no cross-invocation state, no new
+S1 instrumentation.
+
+### 8. Top1-top2 margin, mean/min over active positions (cheap, category: (1))
+
+None of the 5 frozen features or the 4 proposals above distinguish "one
+token is clearly best, runner-up is far behind" from "top-1 and top-2 are
+nearly tied." `predictor_conf_mean_active` (top1 prob) and
+`predictor_entropy_mean_active` both partially capture this but conflate it
+with tail mass: a position where `pp` puts 0.4 on the top token and spreads
+the remaining 0.6 thinly across 5000 vocab entries has middling top1 and
+*high* entropy (dominated by the long thin tail), while a position with 0.4
+on top-1 and 0.35 on a single clear runner-up has the same top1 but much
+*lower* entropy and represents a genuinely different situation for the
+corrector — a real two-way call rather than diffuse uncertainty. This is the
+standard "margin vs. entropy" distinction from active-learning uncertainty
+sampling, and it's not represented in the current feature set at all.
+
+Proposed features: `predictor_margin_mean_active` and
+`predictor_margin_min_active` = mean/min over active positions of
+`top1_prob - top2_prob`. Computable via `pp.topk(2, dim=-1).values` right
+next to the existing `pp.max(dim=-1)` call at `l1_policy.py:122` — one extra
+`topk` call, no new tensors held across invocations, no retraining-time-only
+computation needed (unlike features #1/#2 above, this is as cheap in the
+*live* hook as in offline training, so no live/offline asymmetry to
+introduce).
+
+**Concrete failure mode this could catch:** two blocks with identical
+`predictor_conf_mean_active ≈ 0.4` and similar `entropy_mean_active` (because
+both have long-tailed remaining mass) but different margins — one is a
+genuine top-2 coin-flip (small margin, corrector plausibly resolves it one
+way or the other) and one has a clear-but-imperfect top-1 pick with the rest
+of the mass diffuse noise (large margin, corrector less likely to overturn
+it). Current features score these identically; margin doesn't.
+
+**Priority:** try before #1/#2 above (no cross-invocation state, no
+live-hook statefulness to add, purely additive to the existing
+`features_from_predictor_logits` return dict) — same cost tier as #3
+(pooled-vocab entropy), and orthogonal to it (margin is a per-position
+top-2 statistic; pooled-vocab entropy is a cross-position mixture
+statistic). Worth trying together or in the same ablation pass since
+neither one's presence should mask the other's individual contribution —
+report both single-feature-added AUCs, not just the combined one.
+
+### 9. Contiguous-run length of low-confidence active positions (moderate, category: (1))
+
+Idea #3's pooled-vocab entropy asks whether uncertainty is concentrated on
+one recurring token-choice across the block; this asks a spatially distinct
+question: whether the *low-confidence positions themselves* are clustered
+together in the sequence or scattered. A block where positions 4-9 (six in a
+row) are all low-confidence and everything else is high-confidence describes
+one localized hard span — plausibly one semantic unit (a name, a
+multi-token number, a code identifier) that the corrector can fix in one
+coherent pass. A block with the same *count* of low-confidence positions
+scattered singly across 30 positions describes diffuse, probably
+independent uncertainty, where a single corrector pass is less likely to
+cleanly resolve all of them. `predictor_conf_std_active` and
+`entropy_mean_active` are both order-invariant (permuting which active
+positions have which values doesn't change either statistic) and
+structurally cannot see this.
+
+Proposed feature: `low_conf_max_run_frac_active` = length of the longest
+contiguous run of active positions with `top1 < τ` (a fixed threshold, e.g.
+the block's own median top1 to stay scale-free — needs picking a concrete τ
+before implementing, flagged here as an open parameter not a decided one),
+divided by `active_mask_size` to stay comparable across block lengths for
+the same normalization reason idea #1's rank-fraction and the
+block-position entry's `block_frac_remaining` both normalize by.
+
+**Why this is a different cost tier than #8:** needs positions kept in
+their original sequence order (not just reduced to an unordered set of
+`top1` values), which `features_from_predictor_logits` already has via
+`am`'s position-indexed boolean mask before the `t = top1[am]` flattening
+step at `l1_policy.py:127` — so it's still a pure function of the current
+invocation's data already in scope, no cross-invocation state needed. But
+it needs a threshold choice (τ) that #8 doesn't, and threshold choices are
+exactly the kind of extra researcher-degree-of-freedom that's easy to
+quietly overfit on a small N — same caution flagged for the block-position
+entry above, though this is a within-block spatial statistic rather than a
+cross-sample position statistic, so the specific rev-2 HumanEval failure
+mode doesn't directly transfer.
+
+**Priority:** below #8 (needs a threshold decision, #8 doesn't), above #1
+(no cross-invocation state, #1 needs a rolling window). Try after #3 and #8
+have been evaluated individually; if either already saturates AUC further,
+this one's marginal value is unclear until that's known.
+
+### Running priority list across all three Track C passes (9 ideas total)
+
+Cheapest / no new instrumentation / no threshold parameter first:
+**#3 (pooled-vocab entropy) ≈ #8 (top1-top2 margin)** → **#9 (contiguous
+low-conf run, needs a τ)** → **#2 (agreement-rate-so-far, needs live-hook
+statefulness)** → **#1 (rank-within-recent-blocks, needs new
+per-position instrumentation to do properly)** → **block-position variant
+(lowest priority, documented overfit history on this exact problem class)**.
+Not re-deciding this ordering from scratch each pass — flagging here so the
+next Track C fire building on this file starts from "what hasn't been tried
+yet" rather than re-deriving the same four brief-listed motivations a third
+time.
