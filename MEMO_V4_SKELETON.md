@@ -6,6 +6,18 @@ Drafted 2026-08-23 by the L1 research-iteration bot (Track D). Source: `MEMO_L1_
 this table maps to). `phase_b/v2.jsonl` was "in flight" as of the last commit that
 touched this repo — check whether it has landed before using this.
 
+Re-checked 2026-08-23 ~18:25 UTC (Track D pass 4): `phase_b/v2.jsonl` still hasn't landed in this
+repo (no `phase_b/` directory present) — EC2 run status not visible from here, Lucas drives that
+side directly per the routine brief. Re-fetched `MEMO_L1_REV4.html` and `LANDSCAPE.md`; no changes
+to Sections 1-2 source material or the Gate-8 competitor count (still 10). One non-Kuleshov paper
+(SchED, 2512.02892) had its authorship attribution corrected on `research-ideation` this same day
+(was wrongly flagged Kuleshov-authored 08-21, corrected non-Kuleshov 08-23) — it's a global
+sequence-level halting mechanism, not part of L1's pre-commit-eligibility competitor cluster or its
+shape-vs-scalar precedent cluster, so no change needed to the related-work paragraph below. Also
+folded in 4 newer `L1_AUDIT_FINDINGS.md` entries (#4-#7) into the "Known caveats" list in Section 3
+below — #6 in particular affects the `l1_mlp:0.40` weights this run is testing and should be
+resolved before trusting that row.
+
 **How to fill this in (<30 min):**
 1. `python phase_b_evaluate.py ~/proseco/phase_b/v2.jsonl` on the EC2 box (or wherever
    `v2.jsonl` lives once the run completes).
@@ -84,12 +96,36 @@ now reports the pre-registered N=100(GSM8K)/N=64(HumanEval) run, not the N=40 pi
 `phase_b_evaluate.py`'s stdout here verbatim, then write one sentence translating it into the ask
 (see TL;DR guidance above).
 
-**Known caveats to carry forward regardless of verdict** (from `L1_AUDIT_FINDINGS.md`):
+**Known caveats to carry forward regardless of verdict** (from `L1_AUDIT_FINDINGS.md`,
+refreshed 2026-08-23 — 4 findings added since this skeleton was first drafted, #4/#6 are new
+and matter more than the original #2/#3):
+- **Finding #6 (HIGH, most important — check before trusting the `l1_mlp:0.40` row at all):**
+  `s1/runs/*.jsonl` had byte-identical files committed under different timestamp names;
+  `l1_training.py`'s unfiltered glob read some prompts' invocations 2-3x, overweighting them in
+  the BCE loss that produced the *exact* `l1_weights.json` deployed as `l1_mlp:0.40` in this run.
+  Does not invalidate the pilot's accuracy methodology, but if the `l1_mlp:0.40` row disappoints,
+  this is a confound to rule out before concluding the feature set is at fault — confirm whether
+  `s1/runs/` was deduped and `l1_weights.json` retrained before this run's data was collected, and
+  say so explicitly in Section 3 (either "weights retrained on deduped pool" or "confound not yet
+  ruled out, numbers below are provisional").
+- **Finding #4 (HIGH):** the Phase A "AUC=0.9589" / "matches Phase A ceiling" framing
+  (Section 1/2 language) is optimistic-selection-biased — `l1_training.py` picks its
+  best-of-~300-checkpoints by peeking at the same held-out set it then reports the metric on, with
+  no third split. Doesn't touch Phase B's downstream-accuracy numbers directly, but if Section 1-2
+  text is copied verbatim from `MEMO_L1_REV4.html` as instructed above, add a one-line caveat next
+  to the 0.9589 citation rather than presenting it as a clean held-out number.
 - Finding #2 (gsm8k boxed-answer parsing, first-match vs last-match): `phase_b_evaluate.py`
   auto-rescores from `gen_text` on load, so v2 numbers should already be correct — confirm the
   stdout printed `[eval] re-scored N/M rows` and note the count here if nonzero.
+- Finding #7 (MEDIUM): the boxed-answer regex also mis-scores `\boxed{\frac{a}{b}}`-style nested
+  answers as wrong even when correct (stops at the first `}`) — same rescore-on-load fix as #2
+  should cover it if `phase_b_evaluate.py`'s regex was patched; if not, raw GSM8K accuracy in
+  Table V2-1 is a systematic undercount (policy-neutral, so relative deltas should be fine).
 - Finding #3 (leakage invariant not enforced, only inferred consistent): still an open TODO,
   worth one sentence in the "open concerns" list if not resolved by run time.
+- Finding #5 (LOW): `phase_b_evaluate.py`'s rescore path can silently no-op on a network hiccup
+  with no warning — if the stdout has no `[eval] re-scored` line at all (not even `0/0`), don't
+  assume rescoring ran; re-check before trusting the accuracy table.
 
 ## Section 4 — The decisive experiment / A100 ask
 
