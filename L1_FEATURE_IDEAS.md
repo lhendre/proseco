@@ -320,3 +320,113 @@ Not re-deciding this ordering from scratch each pass — flagging here so the
 next Track C fire building on this file starts from "what hasn't been tried
 yet" rather than re-deriving the same four brief-listed motivations a third
 time.
+
+---
+
+## 2026-08-23 — Track C, fourth pass: structural gap in the entropy feature triplet, plus two shape statistics not yet proposed
+
+All four routine-brief motivations are covered (passes 1-2), and passes 1-3
+between them cover per-position margin, pooled-vocab mixture entropy, and
+within-block spatial clustering of low-confidence positions. Re-reading
+`features_from_predictor_logits` (`l1_policy.py:119-135`) once more before
+proposing anything, specifically comparing what's computed for `t` (top1)
+against what's computed for `e` (entropy), since the two tensors are built
+from the same `pp` in the same function and get asymmetric treatment.
+
+### 10. `predictor_entropy_std_active` — closes an unexplained asymmetry in the existing feature set (cheapest, category: (1), no threshold, no new instrumentation)
+
+The confidence branch keeps three moments of `t` over active positions:
+mean, min, **std**. The entropy branch keeps only two of `e`: mean, **max**.
+There's no stated design-doc rationale for why entropy gets a tail-extremum
+(`max`) where confidence gets a spread statistic (`std`) instead of also
+getting its own tail-extremum (`min`) or its own spread. This isn't a new
+motivation invented for this pass — it's the same "shape, not just level"
+argument the design doc already uses to justify the 5-feature set over a
+scalar-confidence baseline, applied to a spot where the current set doesn't
+actually follow its own logic. `entropy_std_active` = `e.std()` (guarded to
+0.0 when `e.numel() <= 1`, exactly like the existing `predictor_conf_std_active`
+guard at `l1_policy.py:132`) is one extra line next to the current
+`e.mean()`/`e.max()` calls, pure function of `e` already in scope, no
+threshold, no cross-invocation state.
+
+Concrete failure mode this could catch: two blocks with identical
+`entropy_mean_active` and `entropy_max_active` can differ in whether most
+positions cluster near that mean (low std — a uniformly medium-uncertain
+block) or whether most positions are near-zero entropy with one or two
+outliers pulling the mean up to match the first block (high std — a
+mostly-easy block with a small hard subset). `entropy_max_active` alone
+can't distinguish these because both blocks can share the same single
+maximum; only the spread across the rest of the distribution can.
+
+**Priority: try this first of the three below.** It's the cheapest (one
+line), needs no threshold, and — unlike #3/#8/#9 in prior passes, which all
+add a structurally new statistic — this one is motivated by an inconsistency
+in the current set's own design rather than a new hypothesis, which makes a
+null result easier to interpret (either the asymmetry was harmless, or it
+was quietly costing AUC).
+
+### 11. Skewness of active-position top1 confidence (`predictor_conf_skew_active`) — third moment, category: (1)
+
+Passes 1-3 added statistics about individual-position shape (#8 margin),
+cross-position mixture (#3 pooled entropy), and cross-position spatial order
+(#9 contiguous run). None added a higher moment of the *same* `t` distribution
+that `mean_active`/`min_active`/`std_active` already summarize with its first
+two moments plus an extremum. Skewness is the natural next one, and it's not
+redundant with `std` the way, e.g., a second std-like statistic would be:
+two blocks can share identical mean and std of `t` while differing in
+whether the distribution's mass sits mostly above the mean with a thin low
+tail (negative skew — one or a few severely-bad positions pulling a mostly-good
+block down) or mostly below the mean with a thin high tail (positive skew —
+a mostly-mediocre block with one clean position). These describe different
+corrector-worthiness situations (a small localized fix vs. a broadly
+mediocre block) that `mean`/`min`/`std` alone cannot separate, since
+skewness is by construction the lowest-order moment orthogonal to both.
+
+Standard bias-corrected sample skewness over the same `t = top1[am]` tensor
+already computed at `l1_policy.py:127`; no new tensors, no threshold. One
+implementation note worth flagging before anyone trains on it: skewness
+estimates are noisy at small `n_active` (short blocks), more so than mean or
+std — worth checking the distribution of `active_mask_size` in the pooled
+v2+v3 JSONL before trusting this feature's magnitude, not just its sign, and
+worth reporting AUC-with-vs-without split by block-length quartile rather
+than only pooled AUC, in case this feature's contribution is concentrated in
+long blocks and adds noise in short ones.
+
+### 12. Pearson correlation between per-position top1 confidence and per-position entropy, over active positions (`conf_entropy_corr_active`) — category: (1)+(3)-adjacent, cheap but conceptually distinct from #3/#8
+
+`t` and `e` are computed from the same `pp` but the existing feature set
+never looks at their *joint* relationship across positions — only separate
+marginal summaries of each. Proposed: `corr(t, e)` over active positions
+(guarded to 0.0 when `am.sum() <= 1`, same edge case as the existing `std`
+guards). This is different from #8's margin (a per-position, top-2-only
+statistic) and from #3's pooled-vocab entropy (a mixture of the *distributions*
+themselves, not a summary relating two already-reduced per-position scalars).
+
+Motivation: a position can be low-`top1` for two structurally different
+reasons that current features (including margin and pooled entropy) don't
+cleanly separate at the *block* level — mass concentrated on a small number
+of alternatives (low top1, low-ish entropy: "confidently wrong," corrector
+likely flips to a specific alternative) vs. mass spread thinly over many
+tokens (low top1, high entropy: "genuinely unsure," corrector less likely to
+converge on one specific fix). A block where low-confidence positions are
+predominantly the first kind vs. predominantly the second kind will have
+negative vs. positive/weak correlation between `t` and `e` respectively,
+which no current single-array summary statistic captures. Flagging the
+overlap risk directly: this is close enough in spirit to margin (#8) that
+if both are tried, report each one's single-feature-added AUC separately
+before combining, same discipline pass 3 already recommended for #3 vs #8 —
+otherwise a positive combined result can't be attributed to either.
+
+### Updated running priority (12 ideas total across four passes)
+
+Cheapest / most orthogonal to what's already logged, in order:
+**#10 (entropy_std, one-line, motivated by fixing an existing asymmetry)**
+→ **#3 ≈ #8 (pooled-vocab entropy / margin, tried in pass 3)** → **#11
+(skewness, new moment, needs block-length-quartile check before trusting
+magnitude)** → **#12 (conf-entropy correlation, cheap but overlaps #8 —
+report single-feature AUC separately)** → **#9 (contiguous run, needs τ)**
+→ **#2 (agreement-rate-so-far, needs live-hook statefulness)** → **#1
+(rank-within-recent-blocks, needs new per-position instrumentation)** →
+**block-position variant (lowest priority, documented overfit history)**.
+No implementation done here per the routine brief — this file stays
+proposals-only.
