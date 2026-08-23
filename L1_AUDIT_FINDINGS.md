@@ -254,3 +254,144 @@ pilot, but flagging since it's running on the same EC2 box as everything
 else — a generation that imports something destructive would run
 unsandboxed. Not recommending a change given eval-harness convention, just
 noting it's there.
+
+---
+
+## 2026-08-23 — Track B audit (fire N+2, commit 386a6c3 reviewed)
+
+Re-read `l1_policy.py`, `l1_training.py`, `phase_b_pilot.py`, and
+`llada/generate.py`'s `corrector_policy` hook again, then went one level
+below the code this time and pulled the actual git blob SHAs of the files
+under `s1/runs/` (the directory `l1_training.py --runs_dir` points at by
+default, and the directory this repo actually has committed data in) to
+check finding #3's "the numbers happen to line up" inference against the
+real files rather than just `l1_weights.json`'s summary counts. Found a
+concrete, previously-unflagged bug. One smaller eval-parsing bug too.
+
+### 6. HIGH — `s1/runs/*.jsonl` contains byte-identical files committed
+under different timestamp names; `l1_training.py`'s unfiltered glob loads
+each one's records multiple times, overweighting those prompts in the loss
+that trained `l1_weights.json` (the exact policy the live EC2 pilot is
+testing right now as `l1_mlp:0.40`)
+
+`git ls-tree` blob SHAs for the non-empty files currently in `s1/runs/`:
+
+| blob sha (first 8) | size | files sharing it |
+|---|---|---|
+| `590dc20f` | 133,741 B | `gsm8k_20260810_064421.jsonl`, `gsm8k_20260811_161123.jsonl`, `gsm8k_20260813_035659.jsonl` (**3 copies**) |
+| `881be987` | 1,490,966 B | `gsm8k_20260811_170447.jsonl`, `gsm8k_20260813_045034.jsonl` (**2 copies**) |
+| `afca41b2` | 171,384 B | `gsm8k_20260812_050405.jsonl` (unique) |
+| `a70b2d0f` | 69,072 B | `humaneval_20260810_064421.jsonl`, `humaneval_20260811_161123.jsonl`, `humaneval_20260813_035659.jsonl` (**3 copies**) |
+| `a1278690` | 1,229,091 B | `humaneval_20260811_170447.jsonl` (unique) |
+| `eaa454b1` | 64,718 B | `humaneval_20260812_050405.jsonl` (unique) |
+| `06f787cd` | 1,449,919 B | `humaneval_20260813_045034.jsonl` (unique) |
+
+(Three more `gsm8k_2026081*_060*.jsonl` files are the git empty-blob SHA —
+0 bytes, contribute nothing, harmless.)
+
+So of 9 `gsm8k_*.jsonl` files, only 3 distinct non-empty contents exist,
+spread across 6 filenames; of 6 `humaneval_*.jsonl` files, only 4 distinct
+contents exist, spread across 6 filenames (`a70b2d0f` alone is committed 3
+times).
+
+`l1_training.py`'s `load_records()`:
+
+```python
+for path in sorted(glob.glob(f"{runs_dir}/*.jsonl")) + sorted(glob.glob(f"{runs_dir}/v2_n50/*.jsonl")):
+    if "v1_pre_confidence" in path or "prior" in path or "v3_partial" in path:
+        continue
+    for line in open(path):
+        ...
+        recs.append(r)
+```
+
+None of these filenames contain `v1_pre_confidence`, `prior`, or
+`v3_partial`, and there is no dedup by content hash or by
+`(sample_id, block_idx, step_in_block)` — every file that glob-matches gets
+its lines appended to `recs` independently. Concretely: every invocation
+record from the `590dc20f`/`a70b2d0f` run is read into `recs` **3 times**,
+every record from the `881be987` run **2 times**, while the `afca41b2` /
+`a1278690` / `eaa454b1` / `06f787cd` runs are read once each. (There's also
+no `s1/runs/v2_n50/` directory in this repo at all — the docstring's
+"pooled v2 (N=50) + v3 (N=100)" framing doesn't match what's actually on
+disk here; all the data lives flat in `s1/runs/`, undifferentiated by
+version, which is presumably why the version-name exclusion filter never
+fires.)
+
+**Why this isn't caught by the grouped 80/20 split:** `GroupShuffleSplit`
+groups by `sample_id`, so every copy of a given prompt's invocations lands
+in the same fold — this does **not** cause train/test leakage. What it does
+cause: the BCE loss (and the reported `n_train_invocations` /
+`n_test_invocations` counts in `l1_weights.json`'s `meta`) implicitly
+triples the gradient contribution of whichever prompts happen to be in the
+`590dc20f`/`a70b2d0f` run and doubles the `881be987` run's, relative to
+every other prompt in the pool. If those over-represented runs have
+systematically different corrector-usefulness statistics than the rest of
+the pool (e.g. different `broke_at_step_1` base rate — plausible if they're
+from an earlier/later date with a different checkpoint or hyperparameter
+history per the `s1/README.md` protocol notes), the trained MLP is
+disproportionately fit to those prompts' quirks rather than the intended
+uniform 200-prompt pool.
+
+**Concrete failure scenario:** if `590dc20f`'s ~50-ish gsm8k prompts (guess
+from file size relative to `afca41b2`'s) have an unusually high or low
+`broke_at_step_1` rate compared to the rest of the pool — plausible sampling
+noise on any subset this size — that subset's influence on the trained
+decision boundary is 3x what a uniform-weighted 200-prompt pool would give
+it, which is exactly the kind of hidden non-uniform weighting that would
+make a reported held-out AUC (already flagged as optimistically biased by
+selection in finding #4) diverge further from true generalization
+performance — and this bias is baked into the actual `l1_weights.json`
+currently deployed as `l1_mlp:0.40` in the live Phase B pilot, not just an
+offline metrics artifact.
+
+**Recommend:** before the next retrain (and ideally before trusting the
+current `l1_weights.json`), dedup `s1/runs/*.jsonl` by content hash (or by
+`(sample_id, block_idx, step_in_block)` composite key) in `load_records()`,
+delete or `git rm` the duplicate-name files from the repo, and print the
+count of duplicate lines dropped so silent re-duplication is visible in
+future training runs. Given this directly affects the weights under live
+test, flagging via PushNotification per the routine's rule for
+pilot-invalidating-adjacent findings — this doesn't invalidate the pilot's
+downstream-accuracy *methodology*, but it means the `l1_mlp:0.40` policy
+being measured may not be the policy the design doc describes (uniform
+200-prompt pool), and if the pilot's L1 result disappoints, this is a
+confound to rule out before concluding the *feature set* is at fault.
+
+### 7. MEDIUM — `gsm8k_answer_match`'s `\boxed{}` regex doesn't handle
+nested braces, silently mis-scoring (or zero-scoring) any answer written as
+a LaTeX fraction or other braced macro
+
+```python
+matches = list(re.finditer(r"\\boxed\{([^}]*)\}", text))
+```
+
+`[^}]*` stops at the **first** `}`, including one that belongs to a nested
+group inside the boxed content. For a generation containing
+`\boxed{\frac{1}{4}}`, the regex captures `\frac{1` (everything up to the
+first `}`, which closes `\frac{1}`'s inner brace, not the outer `\boxed{}`).
+After the existing `.replace(",", "").replace("$", "")` cleanup, `pred =
+"\frac{1"`. `float(pred)` raises `ValueError`, falls through to the string-
+equality fallback `pred == target`, which is false against a numeric gold
+target like `"0.25"` — the row is scored wrong even when the model's answer
+is correct, with no crash or warning.
+
+**Concrete failure scenario:** any GSM8K generation whose final boxed
+answer is written as `\boxed{\frac{a}{b}}` (a live-model formatting choice,
+not a hypothetical) is scored incorrect regardless of whether the fraction
+is right. Since this is a formatting-style effect rather than a
+policy-dependent one, it's unlikely to bias the *relative* comparison
+between policies (all policies share the same underlying model and prompt,
+so fraction-formatting rate should be roughly constant across the
+`fixed`/`cadllm_linear`/`l1_mlp` conditions) — but it does mean the raw
+accuracy numbers in the table are a systematic undercount versus true solve
+rate, and if fraction-formatting rate happens to correlate with corrector
+invocation pattern (e.g. the corrector fixing more `\frac{}` formatting in
+one policy than another), it's no longer policy-neutral.
+
+**Recommend:** match balanced/nested braces (a small recursive or
+depth-counting regex, or split on `\boxed{` and manually scan-match the
+closing brace) instead of `[^}]*`, and re-run `gsm8k_answer_match` against
+any already-collected `gen_text` rows to check how many contain
+`\boxed{\frac` or similar nested patterns before trusting the current
+accuracy table.
