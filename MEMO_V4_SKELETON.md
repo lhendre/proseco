@@ -104,16 +104,35 @@ Copy unchanged — the PASS / AMBIGUOUS-or-floors two-column structure already c
 outcomes, just update which column is bolded/leading based on `{{VERDICT}}`.
 
 **Related-work paragraph (refresh before use):**
-> Existing training-free adaptive schedulers (CadLLM, AdaBlock-dLLM, DepCap, Dynamic-dLLM, KLASS)
-> and lightweight learned ones (Apple-RL, TraceLock, LESS) all key on a scalar signal — usually
-> mean confidence, sometimes a KL-derived stability index — to decide when to skip/early-exit
-> correction. L1's contribution is that it reads the *shape* of the predictor's confidence
-> distribution (min, std, entropy over active positions, not just the mean), which the certified
-> Phase A result shows carries additional predictive signal these scalar-keyed methods discard.
+> Existing training-free adaptive schedulers (CadLLM, AdaBlock-dLLM, DepCap, Dynamic-dLLM, KLASS,
+> SWD, CORA-Diff) and lightweight learned ones (Apple-RL, TraceLock, LESS) all key on a scalar
+> signal — usually mean confidence, sometimes a KL-derived stability index — to decide when to
+> skip/early-exit correction. L1's contribution is that it reads the *shape* of the predictor's
+> confidence distribution (min, std, entropy over active positions, not just the mean), which the
+> certified Phase A result shows carries additional predictive signal these scalar-keyed methods
+> discard.
+>
+> **Independent precedent for the shape-vs-scalar thesis (new, found 2026-08-23):** six papers
+> outside this cluster converge on the same design principle from the other direction — that
+> *multi-signal/trajectory-aware* stopping beats single-scalar snapshots — for the sibling
+> pre-commit (not-yet-decoded-token) decision: Jazbec (2512.09106), STaRR (2601.04205), TACG
+> (2607.03236), Mask-Aware Policy Gradients (2607.15200), LATCH/CVC (2607.28166), and Ada-DLM
+> (ACL 2026.acl-long.819). None scoop L1 (different decision target — pre-commit eligibility vs.
+> ProSeCo's corrector-burst budget over already-generated text) but they're citable as independent
+> validation of the thesis. Source: `remasking_test:research-ideation/LANDSCAPE.md`'s KEY_COMPETITORS
+> section (2607.28166 entry + its fire-37/fire-24 updates), logged there as "worth citing if L1's
+> pitch ... is next refined" but not yet pulled into any L1 document before this pass. Caveat: most
+> of these are WebSearch-snippet-level reads per LANDSCAPE.md's own flags (arxiv/ar5iv/semanticscholar
+> were `EGRESS_BLOCKED` on the fires that logged them) — verify primary sources before citing in
+> anything sent externally.
+>
 > This paragraph was last checked against `remasking_test:research-ideation/LANDSCAPE.md`'s
-> Gate-8 competitor list on 2026-08-23 (8 entries, matching the pill list above) — re-verify no
-> new Gate-8-relevant entry has landed in LANDSCAPE.md since, especially any single-scalar-vs-shape
-> comparison that would need citing or distinguishing.
+> Gate-8 competitor list on 2026-08-23. Correction to the prior draft: the cluster is NOT 8 entries
+> matching the pill list above — LANDSCAPE.md's actual pre-commit-eligibility/early-exit cluster
+> already carries 10 (adds SWD/2604.17068 and CORA-Diff/2608.11235 to the original 8), both
+> confirmed non-overlapping with L1 by LANDSCAPE.md's own Gate-8 sweeps (2026-08-11 and 2026-08-15).
+> Re-verify no further entry has landed since, especially any single-scalar-vs-shape comparison
+> that would need citing or distinguishing.
 
 ## Provenance block
 
