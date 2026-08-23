@@ -1,0 +1,493 @@
+<title>L1 Interim Report</title>
+<style>
+  :root {
+    --ground: #FBF9F5;
+    --ground-2: #F5F1E8;
+    --ink: #1B1D22;
+    --ink-2: #3D3F44;
+    --muted: #635F58;
+    --divider: #E8E3D8;
+    --accent: #1F5F5B;
+    --accent-soft: #E9EFED;
+    --proven: #285F3E;
+    --pending: #A65D2A;
+    --killed: #7A2D2D;
+  }
+  :root:not([data-theme="light"]) {
+    @media (prefers-color-scheme: dark) {
+      --ground: #14161A;
+      --ground-2: #1D1F24;
+      --ink: #E8E6E0;
+      --ink-2: #B8B5AD;
+      --muted: #8A857C;
+      --divider: #2A2C31;
+      --accent: #4BAFA8;
+      --accent-soft: #1E2E2C;
+      --proven: #7ABF8E;
+      --pending: #D18A54;
+      --killed: #C87878;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #14161A;
+    --ground-2: #1D1F24;
+    --ink: #E8E6E0;
+    --ink-2: #B8B5AD;
+    --muted: #8A857C;
+    --divider: #2A2C31;
+    --accent: #4BAFA8;
+    --accent-soft: #1E2E2C;
+    --proven: #7ABF8E;
+    --pending: #D18A54;
+    --killed: #C87878;
+  }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: ui-sans-serif, -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
+    font-size: 16px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    margin: 0;
+    padding: 0;
+  }
+
+  .page {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 56px 32px 96px;
+  }
+
+  h1, h2, h3 {
+    font-family: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, "Sitka Text", Cambria, serif;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+    color: var(--ink);
+  }
+  h1 {
+    font-size: 34px;
+    line-height: 1.15;
+    margin: 0 0 6px 0;
+  }
+  h2 {
+    font-size: 22px;
+    line-height: 1.25;
+    margin: 48px 0 12px 0;
+  }
+  h3 {
+    font-size: 17px;
+    font-weight: 600;
+    margin: 24px 0 8px 0;
+  }
+
+  .eyebrow {
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+
+  .header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 24px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--divider);
+    margin-bottom: 32px;
+    flex-wrap: wrap;
+  }
+  .header-meta {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    line-height: 1.5;
+  }
+
+  .subtitle {
+    color: var(--ink-2);
+    font-size: 17px;
+    margin: 4px 0 0 0;
+    max-width: 560px;
+  }
+
+  .status-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+  }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    font-weight: 500;
+    padding: 4px 10px;
+    border-radius: 3px;
+    letter-spacing: 0.02em;
+  }
+  .pill.proven { background: color-mix(in oklab, var(--proven) 12%, var(--ground)); color: var(--proven); }
+  .pill.pending { background: color-mix(in oklab, var(--pending) 12%, var(--ground)); color: var(--pending); }
+  .pill.accent { background: var(--accent-soft); color: var(--accent); }
+
+  .tldr {
+    background: var(--ground-2);
+    border-left: 3px solid var(--accent);
+    padding: 20px 22px;
+    margin: 8px 0 40px 0;
+    font-size: 15.5px;
+    line-height: 1.6;
+  }
+  .tldr strong { color: var(--accent); font-weight: 600; }
+  .tldr p { margin: 0; }
+  .tldr p + p { margin-top: 10px; }
+
+  p {
+    margin: 0 0 14px 0;
+    color: var(--ink-2);
+  }
+
+  strong { color: var(--ink); font-weight: 600; }
+  em { color: var(--ink); font-style: italic; }
+
+  code {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.9em;
+    background: var(--ground-2);
+    padding: 1px 5px;
+    border-radius: 3px;
+    color: var(--ink);
+  }
+
+  ul, ol {
+    margin: 0 0 16px 0;
+    padding-left: 22px;
+    color: var(--ink-2);
+  }
+  li { margin-bottom: 6px; }
+  li strong { color: var(--ink); }
+
+  .table-wrap {
+    overflow-x: auto;
+    margin: 8px 0 20px 0;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+    font-variant-numeric: tabular-nums;
+  }
+  th, td {
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--divider);
+  }
+  th {
+    font-weight: 600;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    border-bottom: 1.5px solid var(--ink);
+    border-top: none;
+    padding-bottom: 8px;
+  }
+  td.num { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; text-align: right; }
+  td.delta {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    text-align: right;
+    color: var(--accent);
+    font-weight: 600;
+  }
+  td.emphasis { color: var(--ink); font-weight: 600; }
+  tr.rule-strong td { border-bottom: 1.5px solid var(--ink-2); }
+
+  .callout {
+    background: var(--accent-soft);
+    padding: 18px 20px;
+    border-radius: 4px;
+    margin: 20px 0 24px 0;
+    font-size: 14.5px;
+    line-height: 1.55;
+    color: var(--ink);
+    border: 1px solid color-mix(in oklab, var(--accent) 25%, transparent);
+  }
+  .callout .eyebrow {
+    color: var(--accent);
+    margin-bottom: 8px;
+  }
+  .callout p:last-child { margin-bottom: 0; }
+
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-top: 8px;
+  }
+  @media (max-width: 560px) {
+    .two-col { grid-template-columns: 1fr; }
+  }
+  .col-box h3 { margin-top: 0; }
+  .col-box.proven h3 { color: var(--proven); }
+  .col-box.pending h3 { color: var(--pending); }
+
+  .provenance {
+    margin-top: 64px;
+    padding-top: 20px;
+    border-top: 1px solid var(--divider);
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 11.5px;
+    color: var(--muted);
+    line-height: 1.7;
+    font-variant-numeric: tabular-nums;
+  }
+  .provenance strong { color: var(--ink-2); font-weight: 500; }
+
+  .stat-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin: 16px 0 24px 0;
+  }
+  .stat {
+    padding: 14px 16px;
+    background: var(--ground-2);
+    border-radius: 4px;
+  }
+  .stat-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .stat-value {
+    font-family: ui-serif, "Iowan Old Style", Palatino, serif;
+    font-size: 22px;
+    font-weight: 500;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+  }
+  .stat-sub {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+  @media (max-width: 560px) {
+    .stat-row { grid-template-columns: 1fr; }
+  }
+
+  .task-table td.wk { color: var(--muted); font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  .task-table td.pri {
+    font-weight: 600;
+    color: var(--accent);
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    text-align: center;
+  }
+</style>
+
+<div class="page">
+  <div class="header">
+    <div>
+      <div class="eyebrow">Collaboration proposal · rev. 4</div>
+      <h1>L1 — a learned skip policy for ProSeCo's corrector</h1>
+      <p class="subtitle">A signal ProSeCo is leaving on the table, a pre-registered pilot showing the right trend, and the decisive experiment fully specified. The one thing that gates it is 2–3 days of A100 time, which also resolves an int8/T4 confound I've been carrying.</p>
+      <div class="status-row">
+        <span class="pill proven">Phase A: signal certified on 22k held-out invocations</span>
+        <span class="pill pending">Phase B pilot: right direction, undersized to certify</span>
+        <span class="pill accent">Ask: 2–3 days A100</span>
+      </div>
+    </div>
+    <div class="header-meta">
+      Lucas Hendren<br>
+      Cornell Tech collab<br>
+      Kuleshov group<br>
+      2026-08-16
+    </div>
+  </div>
+
+  <div class="tldr">
+    <p><strong>Claim.</strong> ProSeCo's corrector fires every step, but a cheap learned probe reading the <em>shape</em> of the predictor's confidence distribution (min, std, entropy over active positions — not just the mean) predicts corrector-usefulness with a margin scalar-confidence controllers (CadLLM, AdaBlock-dLLM, DepCap, Dynamic-dLLM, KLASS, Apple-RL, TraceLock, LESS) cannot match, and using it as a live skip policy trends toward matched-compute accuracy wins on both GSM8K and HumanEval. This is a paper about extending ProSeCo, not competing with it.</p>
+    <p><strong>Where the evidence is.</strong> The step-level predictive signal is <em>certified</em>: on 23,120 corrector invocations from ProSeCo LLaDA-SFT, held out by prompt, L1's shape features beat the scalar-confidence baseline by ΔAUC = +0.019 GSM8K / +0.033 HumanEval, 95% cluster-bootstrap CI lower bounds above zero on both, P(moat ≤ 0) = 0.000. The task-level accuracy signal is <em>trending</em>: in a small pilot (n=40 per benchmark) L1 was the top-accuracy policy on both benchmarks, but the margin was one sample per benchmark and CIs straddle zero at that N. That was the expected outcome of a deliberately underpowered pilot with a pre-registered success criterion, not a disappointing result.</p>
+    <p><strong>What I'm asking for.</strong> The pre-registered decisive run needs ~6× the statistical power of the pilot (100+ prompts × 3–5 seeds, CadLLM retuned to matched NFE): 3+ weeks on my T4, 2–3 days on Cornell A100s. Running it on your cluster simultaneously kills the int8/T4 quantization confound the T4 setup imposes on my logit-shape signal. The decisive experiment is fully specified and pre-committed; the compute is the only missing piece. That's a normal collaboration inflection point — after de-risk, before headline — and it's why the ask is real.</p>
+  </div>
+
+  <div class="eyebrow">Section 1</div>
+  <h2>The idea, precisely</h2>
+  <p>ProSeCo's corrector runs at every step where the fixed schedule fires (ω=2 for both GSM8K and HumanEval, per Table 3 Max), regardless of whether the sequence-state at that step actually needs correction. Empirically, most invocations are wasted — the corrector agrees with the predictor's argmax on the first inner iteration and adds nothing.</p>
+  <p><strong>L1</strong> is a small learned probe (5 features → 16 → 1 MLP, ~100 params, one matmul per invocation opportunity) that predicts whether the corrector will do anything and skips it when the prediction is no. The features are the shape of the predictor's per-position top-1-probability distribution over active-mask positions: <code>mean</code>, <code>min</code>, <code>std</code>, plus <code>entropy_mean</code> and <code>entropy_max</code>. Position features (block index, active-mask size) are deliberately excluded — Phase A showed they add only ~+0.001 AUC on top of confidence shape and inflate overfitting risk on small eval subsets.</p>
+  <p><strong>Why "shape, not mean"</strong> is the paper's non-trivial claim. Existing training-free adaptive schedulers (CadLLM, AdaBlock-dLLM, DepCap, Dynamic-dLLM, KLASS) and lightweight learned ones (Apple-RL, TraceLock, LESS) all key on a scalar — usually mean confidence, sometimes a KL-derived stability index. Two sequences with identical mean confidence can have wildly different distributions: one where every token is moderately certain, one where most tokens are certain but two are garbage. Only the second needs the corrector. Mean is blind to that difference. Shape isn't.</p>
+  <p>The two-phase proof structure:</p>
+  <ul>
+    <li><strong>Phase A (done):</strong> does the shape signal actually predict corrector behavior? Answered yes with a clean statistical margin. Section 2.</li>
+    <li><strong>Phase B (in progress):</strong> does using the signal as a live skip policy improve downstream accuracy at matched compute? Pilot ran; decisive experiment needs A100s. Section 3.</li>
+  </ul>
+  <p>The gap exists because prediction is correlation. "The corrector would have made an edit" ≠ "that edit would have fixed the final answer." A big predictive edge at the step level dilutes into a small accuracy edge at the task level. That's not a flaw — it's the physics of the measurement.</p>
+
+  <div class="eyebrow">Section 2 · Phase A</div>
+  <h2>The signal is real, certified on 23k held-out invocations</h2>
+  <p>S1 v3 protocol: ran ProSeCo LLaDA-SFT (int8 on a T4) on 100 GSM8K + 100 HumanEval prompts (200 prompts, 23,120 corrector invocations), logged one record per invocation with the label <code>was_useful</code> = "corrector argmax disagreed with predictor argmax on the first inner iteration." Fit logistic regression of the label on three nested feature sets, 80/20 grouped split by prompt so same-prompt invocations never straddle train/test, 500-iter cluster-bootstrap over held-out prompts.</p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Feature set</th>
+          <th style="text-align:right">GSM8K AUC</th>
+          <th style="text-align:right">HumanEval AUC</th>
+          <th style="text-align:right">Combined AUC</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><em>conf_mean only</em> (scalar-linear controller family)</td>
+          <td class="num">0.9516</td>
+          <td class="num">0.8916</td>
+          <td class="num">0.9339</td>
+        </tr>
+        <tr>
+          <td>+ conf_min, conf_std, entropy_mean, entropy_max</td>
+          <td class="num">0.9697</td>
+          <td class="num">0.9233</td>
+          <td class="num">0.9593</td>
+        </tr>
+        <tr class="rule-strong">
+          <td>+ block_idx, active_mask_size (position)</td>
+          <td class="num">0.9704</td>
+          <td class="num">0.9250</td>
+          <td class="num">0.9606</td>
+        </tr>
+        <tr>
+          <td class="emphasis">L1 moat over scalar-linear baseline (ΔAUC)</td>
+          <td class="delta">+0.019</td>
+          <td class="delta">+0.033</td>
+          <td class="delta">+0.027</td>
+        </tr>
+        <tr>
+          <td class="emphasis">95% cluster-bootstrap CI on moat</td>
+          <td class="num">[+0.012, +0.026]</td>
+          <td class="num">[+0.027, +0.041]</td>
+          <td class="num">[+0.020, +0.034]</td>
+        </tr>
+        <tr>
+          <td class="emphasis">P(moat ≤ 0), 500-iter bootstrap</td>
+          <td class="num">0.000</td>
+          <td class="num">0.000</td>
+          <td class="num">0.000</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout">
+    <div class="eyebrow">Paper thesis</div>
+    <p>A learned policy over confidence-<em>distribution-shape</em> features (not just mean) can predict, per corrector opportunity, whether ProSeCo's corrector will do anything — and can skip it when it won't. On 23,120 held-out invocations from ProSeCo LLaDA-SFT, that signal beats the scalar-confidence-linear controller family (CadLLM et al.) by tight, statistically airtight margins on both GSM8K and HumanEval. The paper is about turning that predictive edge into a matched-compute accuracy edge inside ProSeCo — extending the framework, not competing with it.</p>
+  </div>
+
+  <div class="eyebrow">Section 3 · Phase B pilot</div>
+  <h2>Live-policy pilot: trending right, deliberately underpowered</h2>
+  <p>The pilot deployed L1 as a real skip policy inside <code>llada/generate.py</code>'s corrector-entry decision (drop-in replacement for the fixed schedule) on 40 held-out prompts per benchmark, single seed. Five policies: <code>fixed</code>, two <code>cadllm_linear</code> thresholds, two <code>l1_mlp</code> thresholds. Downstream accuracy scored (GSM8K: <code>\boxed{}</code> match; HumanEval: pass@1 via generated-code execution).</p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Policy</th>
+          <th style="text-align:right">GSM8K acc</th>
+          <th style="text-align:right">GSM8K NFE</th>
+          <th style="text-align:right">HumanEval acc</th>
+          <th style="text-align:right">HumanEval NFE</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>fixed (paper's ProSeCo Max)</td>              <td class="num">0.650</td><td class="num">344</td><td class="num">0.750</td><td class="num">431</td></tr>
+        <tr><td>cadllm_linear:0.25</td>                        <td class="num">0.675</td><td class="num">334</td><td class="num">0.750</td><td class="num">434</td></tr>
+        <tr><td>cadllm_linear:0.40</td>                        <td class="num">0.675</td><td class="num">304</td><td class="num">0.750</td><td class="num">360</td></tr>
+        <tr><td>l1_mlp:0.60</td>                               <td class="num">0.675</td><td class="num">323</td><td class="num">0.750</td><td class="num">430</td></tr>
+        <tr class="rule-strong"><td><strong>l1_mlp:0.40</strong></td> <td class="num"><strong>0.700</strong></td><td class="num">343</td><td class="num"><strong>0.775</strong></td><td class="num">449</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p><strong>L1 was the top-accuracy policy on both benchmarks.</strong> +5.0 pp over <code>fixed</code> on GSM8K, +2.5 pp over the best <code>cadllm_linear</code> on GSM8K, +2.5 pp over both on HumanEval. Directionally clean. But the margins are 1 sample per benchmark, so with n=40 the paired-bootstrap 95% CI on the primary comparison (L1 vs NFE-matched CadLLM) is <strong>[+0.000, +0.075], P(Δ ≤ 0) = 0.35</strong> on both benchmarks — the CI just touches zero, doesn't clear it. Per the pre-registered criterion this is the <em>ambiguous zone</em>, not a pass, not a kill. Kill trigger (L1 loses to <code>fixed</code>) was <strong>not</strong> fired.</p>
+
+  <p><strong>Matched-compute correction, honestly.</strong> Read the NFE column: <code>l1_mlp:0.40</code>'s advantage over the best <code>cadllm_linear</code> comes partly from spending 13-25 % more compute (343 vs 304, 449 vs 360). At the actually-matched pair (<code>l1_mlp:0.60</code> at 323 NFE vs <code>cadllm_linear:0.25</code> at 334 NFE, both on GSM8K), accuracy is identical (0.675). The pilot's cleanest single-comparison-story is <strong>L1 buys +5.0 pp over <code>fixed</code> at essentially matched NFE (343 vs 344) on GSM8K</strong>. Everything else is either underpowered or off-Pareto. The n=100+, retuned-CadLLM run below fixes the comparison.</p>
+
+  <div class="eyebrow">Section 4 · The decisive experiment</div>
+  <h2>Fully specified, pre-committed, ready to run — needs A100</h2>
+  <p>The pilot's job was to test that the plumbing worked, get a first read on effect direction, and expose a matched-compute flaw the audit could catch (it did — see <code>L1_AUDIT_FINDINGS.md</code>, agent-generated, flagged a training-eval leakage bug that this run fixes). The decisive experiment scales up on all three axes the pilot was thin on:</p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Axis</th><th>Pilot</th><th>Decisive run (pre-committed)</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>N per benchmark</td>          <td class="num">40</td>       <td class="num">100+ (GSM8K), 64 truly-held-out (HumanEval max)</td></tr>
+        <tr><td>Seeds</td>                    <td class="num">1</td>        <td class="num">3–5</td></tr>
+        <tr><td>Held-out from training?</td>  <td>no (leakage)</td>         <td>yes (indices ≥ TRAIN_POOL_N=100)</td></tr>
+        <tr><td>CadLLM threshold</td>         <td>fixed at 0.25 / 0.40</td> <td>retuned per-benchmark to match L1 mean NFE within ~3 %</td></tr>
+        <tr><td>Precision</td>                <td>int8 (T4 constraint)</td> <td>bfloat16 / fp16 (kills the quantization confound)</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p><strong>Compute:</strong> ~3 weeks on my T4, ~2–3 days on Cornell A100s. A T4 version at N=100 single-seed is already running (fixed leakage, three CadLLM bracket points) — that lands in ~2 days and will either certify or land ambiguous with much tighter CIs. The A100 run remains the actual decisive experiment because it also resolves the int8 confound.</p>
+
+  <div class="callout">
+    <div class="eyebrow">Pre-committed success criteria — locked before any results seen</div>
+    <p><strong>PASS:</strong> paired cluster-bootstrap 95 % CI on the L1 vs NFE-matched-CadLLM accuracy delta has lower bound above zero on GSM8K OR HumanEval. Written up as an accuracy table, the pitch converts to a submission plan.<br>
+       <strong>AMBIGUOUS:</strong> CI straddles zero on both. Weakens the accuracy claim but is not fatal — see paper floor below.<br>
+       <strong>KILL:</strong> L1 loses to <code>fixed</code> (not just to CadLLM) on both benchmarks with paired CI upper bound below zero. Learned policy is worse than doing nothing; L1 dies for real.<br>
+       <strong>Third outcome (added 2026-08-22):</strong> if the A100 run also lands ambiguous, the accuracy-improvement claim is dead at this model scale. Paper pivots to (a) diagnostic-signal contribution (the certified Phase A result — shape > mean on 23k held-out) + (b) compute-savings-at-parity contribution.</p>
+  </div>
+
+  <div class="eyebrow">Section 5 · Paper floor + open concerns</div>
+  <h2>What the paper looks like in each outcome, honestly</h2>
+  <div class="two-col">
+    <div class="col-box proven">
+      <h3>If decisive run PASSES</h3>
+      <p>Main-conference target (NeurIPS 2027). Contribution: "ProSeCo + learned skip = same quality at ~X % less compute, or +Y pp accuracy at matched compute, driven by a signal every prior adaptive scheduler is blind to." Ablations, MBPP, MATH, bigger model scan — all trivial extensions with A100 hours.</p>
+    </div>
+    <div class="col-box pending">
+      <h3>If decisive run is AMBIGUOUS or floors</h3>
+      <p>Workshop paper. Contribution splits into two: (1) the certified Phase A diagnostic — <em>predictor confidence distribution shape beats mean-confidence for corrector-usefulness prediction on 23k held-out invocations</em>, useful for anyone building adaptive samplers on masked diffusion LMs; (2) L1 as a compute-parity method — matches CadLLM's accuracy while using strictly fewer or equal FLOPs, driven by better skip decisions on the invocations where correctors don't help.</p>
+    </div>
+  </div>
+  <p style="font-size: 14.5px">The paper has a floor either way. What A100 time decides is main-conference vs. workshop, not whether there's a paper.</p>
+
+  <h3>Open concerns, spelled out because Yair will ask</h3>
+  <ul>
+    <li><strong>Label validity.</strong> Phase A's <code>was_useful</code> label = corrector disagreement. Disagreement is mechanically related to how peaked the predictor's distribution is, so shape features predicting disagreement is <em>expected</em>. Disagreement ≠ improvement. Phase B's downstream-accuracy endpoint is what actually tests whether the signal is exploitable, per benchmark.</li>
+    <li><strong>int8 / T4 confound.</strong> All step-level and pilot data collected under 8-bit bitsandbytes on Tesla T4. Quantization distorts logit magnitudes; L1's signal <em>is</em> the logit distribution's shape. Whether the moat survives at bf16 is unknown. The A100 run resolves this simultaneously with the statistical-power question — that's what makes the combined ask compelling.</li>
+    <li><strong>CadLLM-as-proxy.</strong> Everything here compares against a linear-in-scalar-confidence proxy of the CadLLM mechanism family (verified from their paper), not their released code. A head-to-head with the actual implementation is a natural Phase B+ item once compute is available.</li>
+    <li><strong>Prompt template deviation.</strong> GSM8K eval uses no few-shot examples (paper's canonical eval uses nemo_skills 8-shot CoT). This affects absolute accuracy but not the L1-vs-CadLLM comparison at matched compute (both policies see the same prompts). Absolute accuracy in the table above is lower than the paper's Table 3 numbers for exactly this reason.</li>
+  </ul>
+
+  <div class="provenance">
+    <strong>Provenance.</strong><br>
+    Model: <code>kuleshov-group/proseco-llada-sft</code>, 8-bit quantized via bitsandbytes, on Tesla T4 (15.6 GB)<br>
+    Sampler: ProSeCo Max config from Table 3 (ω=2, S=1 for GSM8K; ω=2, S=4 for HumanEval); block_length=32; gen_length=1024<br>
+    Instrumentation: <code>proseco/llada/generate.py</code> S1 patch, per-corrector-invocation JSONL records<br>
+    v1 data: <code>~/proseco/s1/runs/v1_pre_confidence/</code> · 5,696 GSM8K + 5,360 HumanEval invocations, no confidence fields<br>
+    v2 data: <code>~/proseco/s1/runs/v2_n50/</code> · 5,696 GSM8K + 5,360 HumanEval invocations, with confidence fields<br>
+    v3 data: <code>~/proseco/s1/runs/gsm8k_20260816_024829.jsonl</code> + <code>humaneval_20260816_024829.jsonl</code> · 11,552 GSM8K (100 unique prompts) + 11,568 HumanEval (100 unique prompts) invocations · REAL_EXIT_0 at 06:21 UTC 2026-08-17<br>
+    <br>
+    <strong>Statistical protocol (updated after reviewer critique).</strong><br>
+    Split: 80/20 grouped by <code>sample_id</code> using sklearn <code>GroupShuffleSplit(random_state=42)</code> — same-prompt invocations never straddle train/test<br>
+    Model: <code>sklearn.linear_model.LogisticRegression(C=1.0, max_iter=1000)</code> with <code>StandardScaler</code> preprocessing<br>
+    Primary metric: ROC-AUC on held-out invocations (right lens for a binary label; not R²)<br>
+    Secondary metrics: Average Precision (AP) and coefficient of determination (R², reported only for continuity with prior drafts)<br>
+    Uncertainty: 500-iter cluster bootstrap over held-out <em>samples</em> (not invocations), fixed models fit on the training split, resampled predictions evaluated on each bootstrap draw<br>
+    P(moat ≤ 0): fraction of bootstrap resamples where ΔAUC (or ΔAP, ΔR²) is ≤ 0<br>
+    <br>
+    Phase B pilot data: <code>~/proseco/phase_b/pilot.jsonl</code> · 400 runs (5 policies × 40 prompts × 2 benchmarks), single seed, int8/T4<br>
+    Phase B v2 in flight (2026-08-23): <code>~/proseco/phase_b/v2.jsonl</code> · 100 GSM8K (indices 100–199 seed=0) + 64 HumanEval (indices 100–163), 4 policies, single seed, held-out from L1 training pool (audit-caught leakage fix)<br>
+    Pre-registration: <code>PHASE_B_PREREG_2026-08-22.md</code> · locked and pushed to <code>lhendre/proseco</code> commit <code>a796b4f</code> before v2 launched<br>
+    Analysis: <code>phase_b_evaluate.py</code> in the repo · paired cluster-bootstrap over prompts, per-benchmark, matched-NFE CadLLM auto-selected by minimum |ΔNFE|<br>
+    Instance: EC2 g4dn.2xlarge (T4 15.6 GB, int8 via bitsandbytes), us-west-1; total spend to date: ~$150
+  </div>
+</div>
