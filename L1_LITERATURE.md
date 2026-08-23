@@ -58,3 +58,20 @@ file for today's entry.
 attempt; if still blocked, skip straight to noting it here again and route
 to whichever of B/C/D is actually next in the recency queue instead of
 burning the full attempt budget on retries.
+
+---
+
+## 2026-08-23 08:24 UTC — Track A re-check, still blocked
+
+Single-probe re-check per the note above (one `WebFetch` against
+`arxiv.org/list/cs.LG/recent`, not a full retry of all four hosts):
+`EGRESS_BLOCKED` again, same error shape as last time. This is now 2/2
+fires hitting the same wall — worth a PushNotification once this hits 3
+in a row per the original threshold, or sooner if Lucas is clearly around
+and this is blocking something time-sensitive.
+
+Per the prior entry's guidance, did not burn further budget retrying the
+other three hosts and routed this fire's remaining time to Track C
+(`L1_FEATURE_IDEAS.md`), which was tied with Track A for oldest-touched
+but — unlike Track A — had a completed prior pass and room for a genuine
+new entry (see that file's second dated section).

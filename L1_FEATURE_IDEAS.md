@@ -139,3 +139,74 @@ change to the live hook, but the training-side computation is free from
 existing JSONL). **#1** as proposed needs new per-position instrumentation
 to do properly — deprioritize unless #2/#3 show promise and justify the
 extra S1 collection cost.
+
+---
+
+## 2026-08-23 08:xx UTC — Track C, second pass: block-position-relative-to-EOS
+
+The routine brief's candidate list names a 4th motivation not covered by the
+first entry: "block-position-relative-to-EOS". Flagging a landmine before
+proposing a variant of it, because this is not a fresh idea — it's adjacent
+to one Phase B design already tried and rejected.
+
+### Why this needs extra scrutiny, not just a pitch
+
+`PHASE_B_L1_DESIGN.md` line 19 excludes raw `block_idx` and
+`active_mask_size` from the frozen 5-feature set explicitly: *"Phase A
+showed they add ~+0.001 AUC on top of confidence-shape; keeping them invites
+the same overfitting that trashed HumanEval in rev. 2 at N=50."* So a raw
+position feature has already been tried, on this exact problem, and burned
+a full memo revision on HumanEval overfit. Any position-based proposal has
+to explain why it's different from what already failed, not just that it
+sounds plausible.
+
+### What's actually available at the invocation site
+
+`llada/generate.py`: `num_blocks = gen_length // block_length` (line 154,
+computed once per generation call) and the corrector-invocation loop
+iterates `for block_idx in range(num_blocks)` (line 168). So
+`block_idx / num_blocks` is a free, already-in-scope ratio — no new
+instrumentation.
+
+**Important caveat, checked before proposing this:** LLaDA/ProSeCo's block
+loop runs `num_blocks` iterations unconditionally per the `gen_length`
+generation budget set at call time (lines 149-168) — I did not find
+early-exit-on-EOS logic in this file's block loop. If that's right, "EOS"
+in the candidate-list name is really "the generation's configured length
+budget," not the model's actual end-of-sequence token position, for
+non-terminating generations. Worth Lucas confirming this reading before
+anyone trusts the feature name — if there *is* early EOS handling elsewhere
+in the sampler that I didn't grep for, the semantics change.
+
+### Proposed feature: `block_frac_remaining = 1 - (block_idx + 1) / num_blocks`
+
+Framed as fraction of the block budget remaining, not raw index, for one
+concrete reason the rev. 2 failure doesn't rule out: raw `block_idx` is not
+comparable across samples with different `num_blocks` (a `block_idx=3` means
+"almost done" for a 4-block generation and "just started" for a 40-block
+one) — that non-comparability is a plausible *contributor* to why a raw
+position feature overfit at N=50, on top of the small-sample-size problem
+the design doc's phrase "at N=50" is already flagging. A normalized fraction
+at least removes the cross-sample scale mismatch. It does **not** remove the
+small-sample overfitting risk, and Phase B's held-out sets (N=100/64) are
+still small enough that this risk is live, not hypothetical.
+
+Motivation for why it might carry signal at all: later blocks condition on
+more already-committed tokens, so a confidence-shape signal at
+`block_frac_remaining ≈ 0` (last block) may mean something structurally
+different from the same shape at `≈ 1` (first block, least context) —
+e.g. low confidence late in generation may be rarer and more informative
+(less "the model just hasn't seen enough context yet" noise) than the same
+raw confidence value early on.
+
+**Recommendation:** given this is a re-run of a feature class that already
+caused a HumanEval overfit incident, do not add this casually. If tried,
+train/validate it in isolation (not bundled with #1-#3 above), and — unlike
+those three — treat a positive-looking AUC bump on the *training* split with
+explicit suspicion until it's confirmed on a held-out GroupShuffleSplit at
+Phase A's full N (200 prompts), not just Phase B's smaller eval subsets,
+given that's the exact condition (small N) under which the earlier position
+feature failed. This is squarely a "propose, do not implement" item per the
+routine brief — flagging the priority-vs-#1-#3 question for whoever picks
+this up: probably lowest priority of the four, precisely because its failure
+mode is already documented history here rather than speculative.
