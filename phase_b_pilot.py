@@ -50,18 +50,38 @@ BENCH_CFG = {
 }
 
 
-def load_benchmark(name: str, n: int, seed: int = 0):
+TRAIN_POOL_N = 100  # L1 MLP was trained on the first 100 prompts of each benchmark
+                    # (v3 protocol, seed=0). Phase B held-out prompts MUST start past
+                    # this index to avoid leakage. See L1_AUDIT_FINDINGS.md.
+
+
+def load_benchmark(name: str, n: int, seed: int = 0, held_out: bool = True):
+    """Return n prompts. If held_out=True, prompts are guaranteed disjoint from
+    the L1 training pool (first TRAIN_POOL_N with seed=0 for gsm8k, first
+    TRAIN_POOL_N indices for humaneval). Default True — the leakage bug in
+    the original pilot happened because this was False by construction."""
     if name == "gsm8k":
         ds = load_dataset("openai/gsm8k", "main", split="test")
-        ds = ds.shuffle(seed=seed).select(range(n))
+        # Use the SAME seed=0 shuffle as training, then take the NEXT n after
+        # TRAIN_POOL_N. Guaranteed disjoint from training. GSM8K test has 1319.
+        ds = ds.shuffle(seed=seed)
+        start = TRAIN_POOL_N if held_out else 0
+        assert start + n <= len(ds), f"gsm8k held-out request {n} + start {start} exceeds test size {len(ds)}"
+        ds = ds.select(range(start, start + n))
         return [
-            {"id": f"gsm8k_{i}", "prompt": GSM8K_PROMPT.format(problem=r["question"]), "gold": r["answer"]}
+            {"id": f"gsm8k_{start+i}", "prompt": GSM8K_PROMPT.format(problem=r["question"]), "gold": r["answer"]}
             for i, r in enumerate(ds)
         ]
     if name == "humaneval":
         ds = load_dataset("openai/openai_humaneval", split="test")
-        n = min(n, len(ds))
-        ds = ds.select(range(n))
+        # HumanEval has only 164 problems. Training used indices 0..99, so
+        # held-out is 100..163 (64 prompts). Cap n at that.
+        start = TRAIN_POOL_N if held_out else 0
+        n_avail = len(ds) - start
+        if n > n_avail:
+            print(f"[warn] humaneval held-out: requested {n}, only {n_avail} available (start={start}, total={len(ds)}); using {n_avail}")
+            n = n_avail
+        ds = ds.select(range(start, start + n))
         return [
             {
                 "id": r["task_id"],
