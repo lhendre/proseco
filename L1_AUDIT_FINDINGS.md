@@ -119,6 +119,131 @@ min/max per-benchmark sample index used in training, and have
 sample ids appear in that logged training set — turning the current
 "the numbers happen to line up" into a checked invariant.
 
+---
+
+## 2026-08-23 — Track B audit (fire N+1, commit 6b015b2 reviewed)
+
+Re-read `l1_policy.py`, `l1_training.py`, `phase_b_pilot.py`,
+`phase_b_evaluate.py`, and the `corrector_policy` hook in `llada/generate.py`
+end to end. Findings #1-#3 above are confirmed fixed/deferred as described
+in `b0b1b8d`'s commit message (verified against current file contents, not
+just the commit message). Traced the predictor/corrector NFE bookkeeping in
+`generate.py` (lines 162-372): predictor_nfe increments unconditionally
+every step regardless of `corrector_policy`, and the corrector only
+overwrites already-committed (`~active_mask`) positions, never the ones
+`get_transfer_index` is about to newly unmask — so predictor NFE per block
+is fixed across all three policies and only `corrector_nfe` varies with the
+invocation decision. That's the load-bearing assumption behind "matched
+total NFE" and it holds. Two new findings below.
+
+### 4. HIGH — `l1_training.py`'s reported `final_test_auc` (the AUC=0.9589
+headline number) is optimistically biased by checkpoint selection on the
+same set it's reported on
+
+```python
+for epoch in range(args.epochs):
+    ...
+    with torch.no_grad():
+        probs = torch.sigmoid(model(Xte)).numpy()
+    auc = roc_auc_score(yte_np, probs)
+    if auc > best_auc + 1e-4:
+        best_auc = auc
+        best_state = {...}          # <- checkpoint chosen by peeking at Xte/yte
+        patience = 0
+    else:
+        patience += 1
+    ...
+    if patience >= args.patience:   # <- early stop also driven by Xte/yte
+        break
+...
+model.load_state_dict(best_state)
+...
+final_auc = roc_auc_score(yte_np, probs)   # <- same Xte/yte, reported as the result
+```
+
+`Xte`/`yte_np` (the grouped 20% held-out split) is used for three things:
+picking which of up to 300 epoch checkpoints to keep (`best_state`), when to
+stop early (`patience`), *and* the final reported metric. There's no third
+split — no separate validation set distinct from the number that gets
+written to `l1_weights.json["meta"]["final_test_auc"]` and quoted as "L1 MLP
+hits AUC=0.9589 matching the Phase A linear ceiling." Selecting the
+best-of-~300 checkpoints by a metric computed on a fixed set of ~20% of
+invocations, then reporting that same metric as the generalization estimate,
+is optimistic-selection bias — the reported number is the best draw over up
+to 300 correlated trials on one fixed sample, not an unbiased held-out
+estimate. The grouped-by-`sample_id` split protects against row-level
+leakage (a real invocation from a test prompt was never in the gradient
+step), but does not protect against *this* — checkpoint/epoch selection is a
+form of fitting to the held-out set, just at the epoch-index granularity
+instead of the parameter granularity.
+
+**Concrete scenario:** two epochs, A and B, have true (infinite-data)
+generalization AUC 0.955 and 0.950 respectively, but on this specific
+160/40-prompt split epoch B happens to score 0.959 due to sampling noise in
+which 40 prompts landed in `Xte`. `best_auc` picks B (higher observed AUC),
+`final_test_auc` reports 0.959 — a number that overstates true
+generalization by ~0.009, undetectable from the training run's own output
+because there's no independent set left to check it against.
+
+**Why this matters for the current bet:** Phase A's own held-out ΔAUC
+(+0.019 to +0.033 over the scalar-confidence baseline) is a fairly narrow
+margin. If the MLP's *reported* 0.9589 is inflated by selection bias while
+the *linear baseline it's being compared to* wasn't fit with the same
+epoch-hunting procedure (logistic regression has no early-stopping
+checkpoint to select), the "MLP matches the linear ceiling" claim is not
+comparing like with like — the linear model's number is a plain held-out
+fit, the MLP's is a best-of-300-checkpoints number on the same held-out set.
+
+**Recommend:** three-way split (train / val for early-stop+checkpoint
+selection / test reported once), or k-fold CV with checkpoint selection
+inside each fold, or at minimum re-run with a fixed epoch count (no early
+stopping, no best-checkpoint tracking) and report that AUC instead — if it's
+close to 0.9589 the bias is small and this is moot; if it's meaningfully
+lower, the Phase B pilot's L1 threshold (`l1_mlp:0.40`) was calibrated
+against an overstated confidence in the underlying model and the memo's
+"matches Phase A ceiling" framing needs a caveat regardless of how the
+downstream-accuracy pilot itself turns out. Does not invalidate the Phase B
+*pilot* (that's measuring downstream accuracy directly, not this AUC), so
+not paging on this — but it undercuts the AUC evidence used to justify
+running the pilot in the first place and should be fixed before the memo
+cites 0.9589 as a clean number.
+
+### 5. LOW — `phase_b_evaluate.py`'s rescore path can silently no-op on any
+exception while loading golds, with no signal that rescoring didn't happen
+
+```python
+for held_out in (True, False):
+    try:
+        for s in load_benchmark(bench, 200, held_out=held_out):
+            gold_by_id[s["id"]] = (s["gold"], bench)
+    except (AssertionError, Exception):
+        pass  # ok if we can't cover both; whatever's loaded is fine
+```
+
+`except (AssertionError, Exception)` is redundant (`AssertionError` is a
+subclass of `Exception`) and, more importantly, catches *everything* —
+`ConnectionError` from a failed HF Hub fetch, a `KeyError` from a schema
+change, etc. — not just the expected case (an `AssertionError` from
+`load_benchmark`'s bounds check when `held_out=False` and `n=200` exceeds
+`n_avail`). If `load_dataset` can't reach the Hub (analysis run off the EC2
+box, no cached copy, flaky network), `gold_by_id` silently stays empty,
+`r["id"] in gold_by_id` is `False` for every row, `n_rescored` stays 0 with
+no distinguishing message from the legitimate "nothing needed rescoring"
+case, and `evaluate()` proceeds to print a verdict using whatever `correct`
+values were already in the JSONL — silently skipping the "auto-rescore on
+load" this file's own module docstring promises, with no error and no
+warning. Given findings #1 and #2 were both about defaults/parsing silently
+producing wrong numbers without a crash, this is the same failure shape one
+layer up: the *rescue path* for stale scoring can itself silently fail to
+run.
+
+**Recommend:** narrow the except to `AssertionError` only (the one case the
+comment actually names), and print a warning when `gold_by_id` ends up
+empty or covers only a subset of the ids seen in `rows`, e.g. `warn:
+{n_missing}/{len(rows)} rows have no matching gold, rescore skipped for
+them` — so a network hiccup during offline analysis shows up in the output
+instead of silently falling back to old scores.
+
 ### Noted, not a bug: unsandboxed HumanEval execution
 
 `humaneval_pass()` runs model-generated code via `subprocess.run(["python3",
