@@ -117,3 +117,40 @@ consecutive block would clear the PushNotification threshold); separately,
 if a future Track A fire cross-checks LANDSCAPE.md again, grep the literal
 cluster string rather than testing individual competitor names — that's
 what caught the gap this time.
+
+---
+
+## 2026-08-23 16:2x UTC — Track A 3rd re-check, still blocked — PushNotification sent
+
+Routing: `L1_LITERATURE.md` and `MEMO_V4_SKELETON.md` tied for oldest raw
+file-mtime (both last touched by the 10:26 UTC Track D fire), but by
+dedicated-track work (excluding side-effect touches) Track A's last real
+attempt was 08:26 UTC vs Track D's 10:26 UTC — so Track A routed this fire,
+consistent with the 08:24 and 10:2x entries' own "next fire" notes.
+
+Probed all four briefed sources fresh (not a single-probe spot check this
+time, since the 3-in-a-row threshold was in play):
+
+- `arxiv.org/list/cs.LG/recent` — `EGRESS_BLOCKED`
+- `api.semanticscholar.org` (graph search endpoint) — `EGRESS_BLOCKED`
+- `ar5iv.org/list/cs.LG/recent` — `EGRESS_BLOCKED`
+
+3/3 consecutive fires (02:27, 08:24, this one) hitting the identical
+proxy-level `EGRESS_BLOCKED` error, ~14h apart, no drift in error shape.
+This is now well past the self-set threshold from the prior two entries —
+sent one `PushNotification` this fire per that guidance. Track A remains
+structurally unable to do its job (arxiv/semanticscholar literature sweep)
+until the egress allowlist is updated; this is a config change outside this
+routine's own access, not something a future fire can work around.
+
+Did not re-read `remasking_test:research-ideation/LANDSCAPE.md` this fire
+(no network-derived deltas to cross-check against it, and the 10:2x entry
+already pulled the one outstanding correction found there into the memo).
+
+**Next fire on Track A:** if the allowlist gets fixed, this is a hard reset
+— run the full four-source sweep from the original brief, not a single
+probe, since ~14h of arxiv/semanticscholar output will be unread backlog.
+If still blocked, log a short "still blocked, Nth" entry and route straight
+to B/C/D without repeating the full probe — no need to re-send the
+notification every fire once Lucas has been told once; only re-notify if
+something *changes* (unblocked, or a new reason the block matters more).
