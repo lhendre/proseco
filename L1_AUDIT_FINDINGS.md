@@ -577,3 +577,105 @@ policy-skewed the HumanEval comparison needs a rescore with a fixed
 extractor before the memo cites it.
 
 ---
+
+## 2026-08-24 — Track B audit (fire N+5, commit 194bb4f reviewed)
+
+No code changed since fire N+4 (`git diff 47404b5 HEAD -- l1_policy.py
+l1_training.py phase_b_pilot.py phase_b_evaluate.py llada/generate.py
+PHASE_B_PREREG_2026-08-22.md` is empty — only `L1_FEATURE_IDEAS.md` and
+`MEMO_V4_SKELETON.md` changed, from Track C/D/A fires). No `phase_b/pilot.jsonl`
+or `v2.jsonl` has landed yet (`s1/runs/` still holds only the same
+pre-Phase-B files from prior fires). Findings #1–#2 fixed, #3–#9 still open
+and unchanged, re-confirmed by re-reading current file contents.
+
+Re-read `llada/generate.py`'s corrector fixed-point loop end-to-end for the
+first time looking specifically at the convergence check itself (prior
+fires focused on the feature-extraction and policy-dispatch code around
+it), and found a new issue in the mechanism that produces the `y` label
+`l1_training.py` trains against.
+
+### 10. MEDIUM/HIGH — `torch.allclose` on integer token-id tensors silently
+treats some genuinely-different corrector outputs as "converged", corrupting
+the `broke_at_step_1` label that `l1_training.py` uses as ground truth
+
+`llada/generate.py` lines 281–284, inside the corrector's fixed-point loop:
+
+```python
+if torch.allclose(
+    corrector_x[:, active_region_start:block_end],
+    corrected_tokens,
+):
+    if corrector_step == 1:
+        s1_broke_at_step_1 = True
+    break
+```
+
+Both tensors are `torch.long` **token ids**, not continuous values —
+`corrector_x`/`corrected_tokens` come from `torch.argmax(corrector_logits, ...)`
+(line 279). `torch.allclose`'s default tolerance is
+`atol=1e-8, rtol=1e-5`, applied per PyTorch's documented formula
+`|input - other| <= atol + rtol * |other|`. That formula is evaluated
+generically for integer dtypes too — it isn't gated on floating point. Two
+*different* token ids `a`, `b` with `|a - b| == 1` are judged "close"
+whenever `b >= ~100000` (`1 <= 1e-8 + 1e-5 * b` solves to `b >= 99999.999`,
+so `b == 100000` already clears it). `mask_id=126336` (`llada/generate.py`
+line 69) — the tokenizer's id space extends at least that far, so roughly
+the top ~20% of the vocabulary (ids ≥ 100000 out of ~126k) falls inside the
+affected range.
+
+**Concrete failure mode:** on corrector step 1, if the model's argmax
+prediction genuinely flips to an adjacent-id token in that top ~20% of
+vocab space (an off-by-one id, not necessarily a semantically similar
+token — id adjacency is an artifact of vocab construction, not meaning),
+`torch.allclose` reports "no change" even though `corrector_x` and
+`corrected_tokens` disagree at that position. `s1_broke_at_step_1` gets set
+`True` for a corrector invocation that actually *did* do something.
+
+**Why this matters more than a cosmetic convergence-detection glitch:**
+`l1_training.py` line 60 —
+`y = np.array([0.0 if r.get("broke_at_step_1", False) else 1.0 ...])` —
+uses this exact flag, inverted, as the binary training label for both the
+L1 MLP and the Phase A linear baseline it's compared against. This is the
+`y` that produced AUC=0.9589 and the currently-deployed `l1_weights.json`
+under live test on EC2 right now. A false `broke_at_step_1=True` doesn't
+just mislabel a training row — it mislabels it in the direction that make
+the *policy's actual behavior* (the corrector doing useful work) look like
+a no-op, i.e. it's a labeling bug that specifically corrupts the boundary
+the classifier is trying to learn, for exactly the token-id range the
+tokenizer happens to place `mask_id` and (per LLaDA's usual vocab layout)
+much of the special/control-token region in.
+
+**Not yet confirmed against real data** — same caveat as finding #9: no
+`torch.` runtime available in this fire's sandbox to reproduce the
+`allclose` call directly (verified against the documented formula instead,
+not empirically), and none of the `s1/runs/*.jsonl` records log raw
+predicted token ids (schema is `block_idx, step_in_block,
+corrector_break_step, hit_max, broke_at_step_1, active_mask_size,
+n_active_positions_changed_by_corrector, sample_id, benchmark,
+config_omega, config_S_max` — no token-id field to check the hit rate
+against). Can't currently estimate what fraction of `broke_at_step_1=True`
+rows in the S1 v3 training set this actually flipped.
+
+**Recommend:** replace the `torch.allclose(...)` convergence check with an
+exact-match test appropriate for discrete ids —
+`torch.equal(corrector_x[:, active_region_start:block_end], corrected_tokens)`
+or `(corrector_x[:, active_region_start:block_end] == corrected_tokens).all()`
+— either is a one-line fix with no behavior change for the (presumably
+large majority of) cases where ids are below 100000. Before the next L1
+retrain, it'd be worth a quick offline check: rerun the S1 v3 logging
+pass's convergence check with the exact-match version against the same
+generations (if logits/argmax are still reproducible from the checkpoint)
+and diff how many `broke_at_step_1` labels flip. If the flip rate is
+near-zero this finding is moot in practice; if it's non-trivial, `l1_weights.json`
+was trained against a partially-corrupted label and the S1 v3 AUC numbers
+in `PHASE_B_L1_DESIGN.md` should be treated as provisional until relabeled.
+This is a training-data integrity issue for the *already-trained* MLP, not
+a bug in the Phase B pilot script itself (the pilot only calls
+`L1Policy.predict`/`should_invoke` at inference time — `broke_at_step_1` is
+never computed during pilot runs) — flagging as MEDIUM/HIGH rather than
+paging immediately, since it affects the model already under test rather
+than corrupting the pilot's own accuracy/NFE measurements, and the actual
+label-flip rate is unconfirmed. Worth prioritizing a re-check the next time
+Lucas is looking at retraining L1 or auditing the S1 v3 pipeline.
+
+---

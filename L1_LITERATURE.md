@@ -185,3 +185,31 @@ tree) — memo skeleton tables are still all placeholders, as expected.
 blocked status is established; only escalate to a full sweep on unblock.
 By the routing rule this next fire should land on Track B (last touched
 20:26 UTC 08-23), assuming Track A stays blocked.
+
+## 2026-08-24 06:2x UTC — Track A 6th re-check, still blocked — routed to Track B
+
+Fresh probes this fire:
+- `arxiv.org/list/cs.LG/recent` — `EGRESS_BLOCKED`, same error shape as all
+  five prior fires (02:27, 08:24, 16:25, 00:25, 06:28 UTC across 08-23/08-24).
+- `www.semanticscholar.org/search?...` — also `EGRESS_BLOCKED` (checked this
+  fire in addition to arxiv, since arxiv alone has been the only probe on
+  most prior re-checks; same result, domain-level block not arxiv-specific).
+
+6/6 consecutive now. No re-notify (Lucas already told once at the 3/3 mark;
+nothing new here). L1_LITERATURE.md was the oldest-touched of the four
+track files this fire (last real content at 00:24 UTC 08-24, older than
+L1_AUDIT_FINDINGS.md's 02:26, L1_FEATURE_IDEAS.md's 04:26, and
+MEMO_V4_SKELETON.md's 06:28), so by the routing rule this fire should have
+been Track A itself — and was: this re-check *is* that fire's Track A
+attempt, blocked as above. Per the established fallback (see 467f7b6's
+log entry), routed to whichever of B/C/D was oldest-touched instead:
+that's Track B (L1_AUDIT_FINDINGS.md, last touched 02:26 UTC, ahead of
+C's 04:26 and D's 06:28). Did a Track B audit pass this fire — see
+`L1_AUDIT_FINDINGS.md` finding #10 (`torch.allclose` on integer token ids
+in the corrector convergence check, `llada/generate.py` lines 281-284,
+silently misclassifies some real changes as no-ops for token ids ≥100000,
+corrupting the `broke_at_step_1` label `l1_training.py` trains on).
+
+**Next fire:** if Track A stays blocked again, route to whichever of B/C/D
+is then oldest-touched — after this fire that'll be Track C
+(L1_FEATURE_IDEAS.md, 04:26 UTC) unless D gets touched again first.
