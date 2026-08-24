@@ -126,6 +126,14 @@ and matter more than the original #2/#3):
 - Finding #5 (LOW): `phase_b_evaluate.py`'s rescore path can silently no-op on a network hiccup
   with no warning — if the stdout has no `[eval] re-scored` line at all (not even `0/0`), don't
   assume rescoring ran; re-check before trusting the accuracy table.
+- Finding #8 (LOW, new 2026-08-23): `FixedPolicy` in `l1_policy.py` doesn't implement the
+  `should_invoke(features)` interface `generate.py` expects of a non-`None` `corrector_policy` —
+  currently harmless because `phase_b_pilot.py` special-cases the `fixed` arm to pass
+  `corrector_policy=None` instead. Doesn't affect any number in this memo's tables (no code path
+  in the actual pilot run touches it), but as a side effect the `fixed` arm skips the
+  `features_from_predictor_logits` call that `cadllm_linear`/`l1_mlp` both pay for every predictor
+  step — a small constant-per-step compute asymmetry, not a `total_nfe` difference. Only relevant
+  if this memo ever reports wall-clock/throughput per policy; irrelevant to the accuracy tables.
 
 ## Section 4 — The decisive experiment / A100 ask
 

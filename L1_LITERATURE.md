@@ -154,3 +154,34 @@ If still blocked, log a short "still blocked, Nth" entry and route straight
 to B/C/D without repeating the full probe — no need to re-send the
 notification every fire once Lucas has been told once; only re-notify if
 something *changes* (unblocked, or a new reason the block matters more).
+
+---
+
+## 2026-08-24 00:2x UTC — Track A 4th re-check, still blocked (no re-notify)
+
+Routing: last dedicated-track touch per file, oldest first — A (16:25 UTC
+08-23) < D (18:26) < B (20:26) < C (22:25) — so Track A routes again.
+
+Single fresh probe per the prior entry's own guidance (no need to repeat
+the full 3-source sweep once 3/3 was already established and notified):
+
+- `arxiv.org/list/cs.LG/recent` — `EGRESS_BLOCKED`, identical error shape
+  to the prior three fires (02:27, 08:24, 16:25 UTC on 08-23).
+
+4/4 consecutive fires now. Per the standing guidance from the last entry,
+this is a "nothing changed" case — no PushNotification sent (Lucas was
+already told once at the 3/3 mark; only re-notify on unblock or on the
+block mattering in some new way, neither of which applies here). Routed
+straight to Track D instead: folded new `L1_AUDIT_FINDINGS.md` finding #8
+(FixedPolicy interface mismatch, logged at `cfa0905`) into
+`MEMO_V4_SKELETON.md`'s caveats list — low urgency, doesn't touch any
+number in the pilot tables, noted as such.
+
+Also checked: no pilot output file has landed yet (`s1/runs/` has no new
+`*result*.jsonl` since the last audit pass; no `v2.jsonl` anywhere in the
+tree) — memo skeleton tables are still all placeholders, as expected.
+
+**Next fire on Track A:** same as before — single probe is enough once
+blocked status is established; only escalate to a full sweep on unblock.
+By the routing rule this next fire should land on Track B (last touched
+20:26 UTC 08-23), assuming Track A stays blocked.
