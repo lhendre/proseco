@@ -560,3 +560,159 @@ priority list before re-deriving moments/shapes of `t` or `e` a third or
 fourth time — the remaining unexplored axis after this pass is genuinely
 cross-invocation state (#1, #2) and `pp`-based joint statistics like #14,
 not another single-array summary statistic.
+
+
+---
+
+## 2026-08-24 12:25 UTC — Track C, sixth pass: temporal/within-block-step state, and a budget-awareness feature — a third state category not touched by passes 1-5
+
+Checked this file's last entry (2026-08-24, pass 5) against `L1_AUDIT_FINDINGS.md`
+and `MEMO_V4_SKELETON.md`'s latest commits before starting — this file was the
+oldest-touched of the four track files, per the routine's selection rule.
+
+Passes 1-5 (15 ideas) exhaust two state categories: (a) single-invocation
+statistics of `t`/`e`/`pp` at one predictor call (#3, #8-#15), and (b)
+cross-block state keyed by `sample_id`, folded over *already-logged*
+corrector-invocation records (#1, #2). Re-reading `llada/generate.py:167-329`
+end to end (not just the `features_from_predictor_logits` call site) for
+this pass turned up a third category neither of the first two covers:
+**cross-step state within a single block**, and separately, **the sampler's
+own resource-budget state**, which — unlike (a)/(b) — is not a function of
+`pp` or of past corrector outcomes at all.
+
+### 16. Predictor-confidence delta since the previous predictor step in this block (`predictor_conf_delta_prev_step_mean_active` / `_min_active`) — category: new (temporal), needs live-hook state, no new S1 collection required to *start* logging it
+
+`generate.py`'s `while True:` block loop (lines 183-208) calls the predictor
+and computes `phase_b_features` **every step**, not just on steps where
+`invoke_corrector` ends up `True` — `features_from_predictor_logits` already
+runs unconditionally at line 205 whenever `corrector_policy is not None`.
+That means the live hook already computes a fresh `top1`/`active_mask` for
+every predictor step in the block; nothing currently keeps the *previous*
+step's values around to compare against. Right now every one of the 15
+prior ideas treats each predictor call as if it exists in isolation — none
+asks whether this step's confidence read is a stable read of the block or a
+one-step fluctuation.
+
+Proposed: track `prev_top1` (a position-indexed tensor over the block's
+positions, not just active-position values, so it survives positions
+transitioning in/out of `active_mask` between steps) across iterations of
+the block's `while` loop, reset at each new `block_idx`. At each step,
+restrict to positions active in *both* the current and previous step's
+mask, and compute `(top1_now - top1_prev)` over that intersection:
+`predictor_conf_delta_prev_step_mean_active` = mean of that delta,
+`_min_active` = most-negative (largest confidence *drop*) — a drop is
+plausibly more informative than a rise, symmetric to why the existing
+feature set already prefers `min_active` over `max_active` for confidence.
+First step of a block has no previous-step intersection; define the
+cold-start value as `0.0` (no evidence of change yet), same convention as
+idea #2's cold-start choice in pass 1.
+
+**Concrete failure mode this could catch:** two blocks share identical
+single-step `predictor_conf_mean_active`, but one block's confidence at
+those positions has been stable across the last several predictor steps
+(the model reached a stable read) and the other's has been oscillating step
+to step (the model is still working out what belongs there). The stable
+case is plausibly a worse candidate for corrector invocation — if the
+model's belief hasn't moved, another predictor pass alone is unlikely to
+resolve it either, whereas oscillation suggests the position is still
+"in play" and closer to a value the corrector might usefully intervene on.
+No existing feature (single-invocation or cross-block) can see this,
+because it requires two *consecutive* predictor calls to compare, and
+nothing before this pass tracks predictor state across the `while` loop's
+own steps.
+
+**Cost, and why this is not free like #13/#14/#15:** the *live* hook change
+is small (one tensor carried across loop iterations, reset per block) but
+this is the first idea in the file that changes what the *inline* hook
+computes, not just what `l1_training.py` folds over already-logged JSONL
+columns — training on this feature needs S1 to start logging per-step
+`top1` (or at least the delta) even on non-invoked steps, which the current
+JSONL schema does not capture (only invocation-conditional records are
+written, per `generate.py:301` `if s1_log is not None:` sitting inside
+`if invoke_corrector:`). This is a **new S1 collection requirement**, same
+tier of cost as idea #1's "needs new per-position instrumentation" —
+flagging explicitly since passes 3-5's ideas were all trainable from
+existing v2/v3 JSONL and this one is not.
+
+### 17. Predictor argmax flip rate since the previous step, active positions (`predictor_argmax_flip_rate_active`) — category: new (temporal), same cost tier as #16, complements it
+
+Same cross-step state as #16, but tracks *identity* instability rather than
+*magnitude* instability: fraction of positions active in both the current
+and previous step whose `argmax` token changed, regardless of how much
+`top1`'s probability value moved. This is deliberately not redundant with
+#16 — a position can have a large confidence *delta* while the argmax token
+stays the same (the model becomes more sure of the same pick) or a small
+delta while the argmax *flips* (a near-tied position see-sawing between two
+tokens with similar probability each step). The two together span
+magnitude-of-change and identity-of-change; neither single-step statistic
+in passes 1-5 (including margin, #8) can see either, since margin is a
+snapshot of one step's top1-vs-top2 gap, not a comparison across steps.
+
+Motivation: a block with a high flip rate is one where the predictor itself
+hasn't converged on stable token identities yet — arguably a *worse* moment
+to invoke the corrector (the corrector is fixing an argmax snapshot that
+may already be stale by the next predictor step regardless of correction)
+rather than a better one, which is a genuinely different prediction from
+most of #1-#15 (which mostly hypothesize "more signal here → corrector
+more likely to be useful"). Flagging this as a case where the *sign* of the
+effect is not obvious a priori and should be checked empirically, not
+assumed, before trusting a plausible-sounding story either way.
+
+**Cost:** identical instrumentation requirement to #16 (same `prev_*` state
+across the block loop, same new-S1-collection need) — if #16 is
+implemented, #17 is a marginal addition to the same tracked state, not a
+second independent instrumentation change.
+
+### 18. Budget-state feature: NFE spent so far as a fraction of this generation's matched-FLOPs allowance (`nfe_frac_spent`) — category: new (resource-state, not confidence-based), flag fairness caveat before considering
+
+Distinct from #16/#17 in kind, not just in what state it tracks: this is
+not a function of `pp`/`top1`/`ent` at all. `generate.py` already maintains
+running `predictor_nfe`, `corrector_nfe`, `total_nfe` counters (lines
+162-164, updated throughout the loop) — a policy could, in principle, read
+`total_nfe` so far relative to the generation's allotted budget and make
+invocation decisions that spend more freely early and more conservatively
+as the budget is consumed (or the reverse), rather than treating every
+step's decision identically regardless of how much budget remains.
+
+**Why this needs a fairness flag before anyone touches it, not just a "try
+it" note like #16/#17:** Phase B's whole comparison design (per
+`PHASE_B_L1_DESIGN.md` and the matched-FLOPs framing referenced in
+`L1_AUDIT_FINDINGS.md`'s accounting-bug findings) rests on `fixed`,
+`cadllm_linear`, and `l1_mlp` sharing every code path except
+`should_invoke`. `FixedPolicy` and `CadLLMLinearPolicy` are both
+budget-blind by construction (`FixedPolicy` fires on a step-count modulus,
+`CadLLMLinearPolicy` thresholds a confidence scalar) — if `l1_mlp` alone
+gained access to `total_nfe`/budget state, it would not be a like-for-like
+comparison of *feature quality* anymore, it would be comparing a
+budget-aware policy against two budget-blind ones, conflating two separate
+questions (does L1's feature set predict usefulness better, vs. does
+budget-awareness help at all) into one AUC number. If this is pursued, it
+needs either (a) a matched budget-aware variant of `CadLLMLinearPolicy` for
+a fair three-way comparison, or (b) explicit framing as a separate ablation
+question from the frozen 5-feature-set comparison, not a silent sixth
+feature quietly added to the existing L1 MLP input. Recommend flagging this
+question to Lucas rather than deciding it here, since it changes what
+Phase B's headline comparison is measuring, not just what the MLP takes as
+input.
+
+### Priority and status note
+
+**#16 and #17 need a new S1 logging change** (per-step, not just
+per-invocation, records — or at minimum, live-hook state that starts
+getting logged going forward) before they're trainable at all; they cannot
+be evaluated against the existing v2/v3 JSONL the way #3/#8/#10/#11/#12/
+#13/#14/#15 can. That makes them higher cost than anything in passes 3-5
+despite being conceptually simple, on par with idea #1's per-position
+instrumentation gap from pass 1. **#18 is a policy-design and
+experiment-design question first, a feature-engineering question second** —
+flagging it for Lucas's judgment rather than placing it in the AUC-priority
+ordering below, since "does it help AUC" isn't the operative question until
+the fairness framing is settled.
+
+Updated priority for the *trainable-today* ideas (unchanged from pass 5,
+repeated here so the next pass doesn't have to scroll up): **#10 ≈ #15 ≈
+#3 ≈ #8** → **#13** → **#11** → **#12** → **#14** → **#9** → **#2** →
+**#1**. New-instrumentation-required ideas, separately: **#16 ≈ #17**
+(bundle together, same live-hook change) → **block-position variant**
+(still lowest priority, documented overfit history). **#18** sits outside
+this ordering pending Lucas's call on the fairness question above.
