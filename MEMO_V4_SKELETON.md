@@ -37,6 +37,21 @@ N+5, commit `e5c7254`) into the caveats list below, placed above #9 — it's hig
 (MEDIUM/HIGH vs. MEDIUM) and, unlike #9, potentially affects the deployed `l1_mlp:0.40` weights
 themselves rather than just the HumanEval scoring path.
 
+Re-checked 2026-08-24 ~20:2x UTC (Track D pass 7, longest-stale track this fire — Track D last
+touched 14:26 vs. Track B 16:27 and Track A/C 18:26): `v2.jsonl` still hasn't landed — `phase_b/`
+absent, `s1/runs/` unchanged (same 15 pre-Phase-B `.jsonl` files + `s1_verdict.png` as every prior
+pass). This pass actually fetched `MEMO_L1_REV4.html`'s canonical source
+(`https://claude.ai/code/artifact/de1f873d-060f-4956-bffa-b6f36d37fe33`, works over this sandbox's
+egress even though `arxiv.org` doesn't — Track A's 7 consecutive `EGRESS_BLOCKED` results are
+apparently host-specific, not a blanket network failure) and confirmed it's byte-identical to the
+local `MEMO_L1_REV4.html` (still rev. 4, dated 2026-08-16, same pilot table) — no Section 1/2 text
+changes needed. Re-fetched `remasking_test:research-ideation/LANDSCAPE.md`'s recent history — HEAD
+is still commit `8a56216` (same as pass 6, no new commits since), so the Gate-8 competitor count
+(10) and the related-work paragraph are unchanged again. Folded `L1_AUDIT_FINDINGS.md` finding #11
+(logged fire N+6, commit `f9e72d6`) into the caveats list below, placed above #4 — it's a
+methodology gap in the *training-time* AUC number itself (same class as #4, both undermine trust
+in "0.9589 matches Phase A ceiling") rather than a Phase B pilot/eval bug.
+
 **How to fill this in (<30 min):**
 1. `python phase_b_evaluate.py ~/proseco/phase_b/v2.jsonl` on the EC2 box (or wherever
    `v2.jsonl` lives once the run completes).
@@ -127,6 +142,17 @@ and matter more than the original #2/#3):
   `s1/runs/` was deduped and `l1_weights.json` retrained before this run's data was collected, and
   say so explicitly in Section 3 (either "weights retrained on deduped pool" or "confound not yet
   ruled out, numbers below are provisional").
+- **Finding #11 (MEDIUM, new 2026-08-24 — same "0.9589" citation as #4 below, different
+  mechanism):** `l1_training.py`'s train/test split (`GroupShuffleSplit` on `sample_id`) guards
+  against prompt leakage but has no benchmark-stratification axis, so the one realized 80/20 split
+  has an unreported and unverified GSM8K/HumanEval mix in the held-out fold. Phase A's own
+  certified result shows L1's edge is benchmark-asymmetric (ΔAUC +0.019 GSM8K / +0.033
+  HumanEval) — if the test fold under- or over-represents HumanEval invocations, the reported
+  `final_test_auc = 0.9589` in `l1_weights.json` could be flattering GSM8K, diluting HumanEval, or
+  genuinely representative, with no way to tell from what's saved. Same citation as finding #4
+  below is affected; combine into one caveat next to the 0.9589 number rather than two separate
+  footnotes. Doesn't touch Phase B's downstream accuracy tables (those are prompt-level, correctly
+  guarded by #1/#3) — it's specifically a trust question over the training-time selection number.
 - **Finding #4 (HIGH):** the Phase A "AUC=0.9589" / "matches Phase A ceiling" framing
   (Section 1/2 language) is optimistic-selection-biased — `l1_training.py` picks its
   best-of-~300-checkpoints by peeking at the same held-out set it then reports the metric on, with
