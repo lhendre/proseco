@@ -490,3 +490,90 @@ broken today, this doesn't touch the current pilot's data), but it's an
 interface mismatch that would produce a loud crash — not a silent wrong
 number — for the next person who assumes `load_policy("fixed")` is a
 plug-compatible `corrector_policy` for `generate()`.
+
+---
+
+## 2026-08-24 - Track B audit (fire N+4, commit 467f7b6 reviewed)
+
+No code changed since fire N+3 (`git diff cfa0905 HEAD -- l1_policy.py
+l1_training.py phase_b_pilot.py phase_b_evaluate.py llada/generate.py
+PHASE_B_PREREG_2026-08-22.md` is empty - only `L1_LITERATURE.md`,
+`L1_FEATURE_IDEAS.md`, and `MEMO_V4_SKELETON.md` changed in between, from
+Track C/D/A fires). Findings #1-#2 fixed, #3-#8 still open and unchanged -
+re-confirmed by re-reading current file contents, not just diffing.
+
+Read `phase_b_evaluate.py`'s NFE-matching and paired-bootstrap logic in full
+for the first time this pass (prior fires focused on `l1_training.py` /
+`l1_policy.py` / `s1/runs/`). The "pick the CadLLM threshold whose observed
+mean NFE lands closest to L1's" selection (`phase_b_evaluate.py` lines
+105-108) looked at first glance like data-dependent cherry-picking of the
+comparator, but `PHASE_B_PREREG_2026-08-22.md` line 54 explicitly
+pre-registers exactly this procedure ("uses whichever bracket point lands
+closest in mean NFE, decided by the observed NFEs, not by which one L1
+beats") - not a bug, already locked pre-hoc. `paired_bootstrap`'s cluster
+resampling (same resampled id list applied to both A and B per iteration)
+is the correct paired-bootstrap construction. No issues found in either.
+
+### 9. MEDIUM - `humaneval_pass` extracts the FIRST fenced python code block
+via `re.search`, the same first-match failure mode already fixed for
+GSM8K's `\boxed{}` parsing (finding #2) but never applied to the HumanEval
+side
+
+```python
+code_match = re.search(r"```python\s*\n(.*?)```", text, re.DOTALL)
+body = code_match.group(1) if code_match else text
+```
+
+Finding #2 (fixed in the commit before `c83fb41`) established the exact
+principle this violates: a generation that produces more than one candidate
+answer in the same text - an early wrong attempt, a "wait, let me
+reconsider" retry, or (specific to this pilot) a diffusion-model corrector
+editing tokens in a way that leaves stray or duplicated fenced blocks in the
+decoded output - gets silently scored against whichever occurrence the
+regex happens to grab, not necessarily the model's final one.
+`gsm8k_answer_match` was switched to `matches[-1]` for exactly this reason;
+`humaneval_pass` still takes `re.search`'s first match, three fires later.
+
+**Why this one is a bigger fairness concern than #7 (the gsm8k `\frac{}`
+nested-brace bug):** finding #7 was argued to be policy-neutral because
+fraction-formatting rate should be roughly constant across `fixed` /
+`cadllm_linear` / `l1_mlp` (same model, same prompt). That argument does
+**not** transfer here. The whole premise of Phase B is that the three
+policies invoke the corrector at different rates and at different decision
+points, and the corrector's job is specifically to clean up degenerate/
+low-confidence token regions. If heavier corrector invocation (e.g.
+`cadllm_linear:0.15`, which brackets from above with more invocations, or
+`l1_mlp:0.40` if it invokes more on messy generations) systematically
+produces fewer stray/duplicate code fences than a lighter policy, first-
+match code-fence extraction would score policies asymmetrically for a
+reason unrelated to whether the *actual solution* is correct - directly
+undermining audit-brief goal (c), fair comparison across policies sharing
+every code path except `should_invoke`.
+
+**Concrete failure scenario:** a generation containing two fenced python
+blocks - e.g. the model emits a first attempt, the corrector's edits shift
+enough tokens around a block boundary that decoding produces a leftover
+fragment of the pre-edit block before the final one - gets scored against
+the first (possibly stale/wrong) block regardless of whether the second one
+passes HumanEval's tests. No crash, no warning, just a wrong `correct` value
+that `phase_b_evaluate.py`'s accuracy table takes at face value.
+
+**Not yet confirmed against real data** - no Phase B v2 `pilot.jsonl` has
+landed yet (only stale `s1/runs/` files predate this design), so this is a
+plausible mechanism from reading the code, not something observed in
+output. Not paging on it for that reason: unlike finding #6 (confirmed via
+actual committed blob SHAs), this needs `gen_text` from a real run to check
+the multi-fence rate before treating it as confirmed rather than
+theoretical.
+
+**Recommend:** switch to last-match (or, more robustly, prefer a fenced
+block that contains a `def {entry_point}` matching `gold["entry_point"]`)
+for consistency with the fix already applied to `gsm8k_answer_match`;
+before trusting the HumanEval accuracy column in any `phase_b/pilot.jsonl`
+output, grep `gen_text` for rows with more than one fenced-python-block
+occurrence and check whether that rate differs by policy - if it's ~0
+across all rows this finding is moot in practice, if it's nonzero and
+policy-skewed the HumanEval comparison needs a rescore with a fixed
+extractor before the memo cites it.
+
+---
