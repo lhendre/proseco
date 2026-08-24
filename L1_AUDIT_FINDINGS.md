@@ -770,3 +770,126 @@ trustworthy the training-time AUC number is as a *selection criterion*,
 not a corruption of the deployed policy's live-tested behavior.
 
 ---
+
+## 2026-08-24 — Track B audit (fire N+7, commit 3937917 reviewed)
+
+Track A egress re-check this fire: still `EGRESS_BLOCKED` on `arxiv.org`
+(8/8 consecutive fires now, same error shape — tested directly this fire
+via a fresh fetch of `arxiv.org/list/cs.LG/recent`, not just inferred from
+a stale flag). No re-notify — already flagged to Lucas at the 3/3 mark,
+nothing new to report.
+
+Routed to Track B per the fallback rule: of the four track files,
+`L1_AUDIT_FINDINGS.md` (Track B) was last touched at fire N+6 (`f4aab3a`,
+16:27:55Z), older than `L1_LITERATURE.md`/`L1_FEATURE_IDEAS.md` (both
+`ec83a52`, 18:26:21Z) and `MEMO_V4_SKELETON.md` (`3937917`, 20:25:23Z) —
+no tie this time, B is unambiguously oldest.
+
+`git diff f9e72d6 HEAD -- l1_policy.py l1_training.py phase_b_pilot.py
+phase_b_evaluate.py llada/generate.py PHASE_B_PREREG_2026-08-22.md
+l1_weights.json` is empty — no code or weights changed since fire N+6's
+review commit; the three intervening commits are Track A/C/D file-only
+changes. Findings #1–#2 fixed, #3–#11 still open and unchanged. `s1/runs/`
+still holds only the same 15 pre-Phase-B files as every prior fire (byte
+sizes match fire N+6's tally exactly); no `phase_b/pilot.jsonl` or
+`v2.jsonl` anywhere in the tree.
+
+This fire cross-referenced the two places the five multi-conf features get
+computed — `l1_policy.py`'s `features_from_predictor_logits` (used live,
+at Phase B inference time, to make the corrector-entry decision) and the
+inline block in `llada/generate.py`'s S1 logging path (used to produce the
+training labels/features that `l1_training.py` fits on) — since no prior
+fire had diffed the two against each other line-by-line.
+
+### 12. LOW/MEDIUM — the S1 training-feature computation and the live L1
+inference-feature computation are two independent implementations of the
+same formula, not one shared function, with nothing enforcing they stay
+identical
+
+`llada/generate.py` imports and calls the real, shared
+`features_from_predictor_logits` for exactly one purpose — the live Phase B
+corrector-entry decision:
+
+```python
+# generate.py, lines 203-208 (Phase B inference path)
+from l1_policy import features_from_predictor_logits
+phase_b_features = features_from_predictor_logits(
+    logits, active_mask, active_region_start, block_end,
+)
+invoke_corrector = corrector_policy.should_invoke(phase_b_features)
+```
+
+But the S1 logging path — the code that produces the *training* rows
+`l1_training.py` reads via `predictor_conf_mean_active` etc. — does not
+call that function. It re-derives the same five quantities inline, a
+separate ~20 lines a few hundred lines away in the same file:
+
+```python
+# generate.py, lines 240-258 (S1 logging path, only runs when s1_log is not None)
+with torch.no_grad():
+    pl = logits[:, active_region_start:block_end].float()
+    pp = torch.softmax(pl, dim=-1)
+    top1 = pp.max(dim=-1).values.reshape(-1)
+    ent = -(pp.clamp_min(1e-12).log() * pp).sum(dim=-1).reshape(-1)
+    am = active_mask.reshape(-1).bool()
+    if am.any():
+        top1_a = top1[am]
+        ent_a = ent[am]
+        s1_predictor_conf = {
+            "predictor_conf_mean_active": float(top1_a.mean()),
+            "predictor_conf_min_active": float(top1_a.min()),
+            "predictor_conf_max_active": float(top1_a.max()),
+            "predictor_conf_std_active": float(top1_a.std()) if top1_a.numel() > 1 else 0.0,
+            "predictor_entropy_mean_active": float(ent_a.mean()),
+            "predictor_entropy_max_active": float(ent_a.max()),
+            "predictor_conf_mean_block": float(top1.mean()),
+            "predictor_entropy_mean_block": float(ent.mean()),
+        }
+    else:
+        s1_predictor_conf = {}
+```
+
+Compared term-by-term against `features_from_predictor_logits` in
+`l1_policy.py`: `pl`/`pp`/`top1`/`ent`/`am` are constructed identically
+(same slice bounds, same softmax dim, same `1e-12` clamp epsilon, same
+`.reshape(-1)`), and the five keys `l1_training.py` actually trains on
+(`predictor_conf_mean_active`, `_min_active`, `_std_active`,
+`predictor_entropy_mean_active`, `_max_active`) are computed with the same
+reductions in both places. So as of this commit the two paths agree — this
+is not a live numerical bug, and it does not change any Phase A or Phase B
+number reported so far.
+
+**Why it's still worth flagging:** there is no shared call, no shared
+constant, and no test asserting the two stay in sync — just two hand-copies
+of the same five-line formula, one of which (`l1_policy.py`'s) is already
+sitting right there, importable, and in fact imported into this exact file
+for the *other* code path three lines above. The natural edit — e.g.
+fixing the `1e-12` clamp epsilon per an earlier numerical-stability
+concern, switching `pp.clamp_min` to a different floor, adding a sixth
+feature, or changing the `.float()` cast to something more precision-aware
+for HumanEval's longer contexts — is far more likely to touch only one of
+the two copies than both, since a contributor editing the live inference
+path (`l1_policy.py`, the file `PHASE_B_L1_DESIGN.md` cites as "FROZEN")
+has no obvious reason to also open `generate.py`'s S1 block, and vice
+versa. If that happens, `l1_training.py` would keep training on one
+formula while `phase_b_pilot.py` scores policies on a silently different
+one — a train/inference skew that produces no error, no NaN, no crash, just
+a policy whose live behavior no longer matches what its AUC was measured
+against. This is the same failure shape as finding #6 (silent data
+duplication) and finding #10 (silent mislabeling): nothing throws, the
+pipeline runs and reports a clean number, and the corruption is invisible
+without a line-by-line diff like this one.
+
+**Recommend:** delete the inline S1 block's re-derivation and call
+`features_from_predictor_logits(logits, active_mask, active_region_start,
+block_end)` directly, keeping only the S1-specific extra keys
+(`predictor_conf_max_active`, `predictor_conf_mean_block`,
+`predictor_entropy_mean_block`) as an update on top of its returned dict.
+One shared function, one place to fix a numerical-stability issue or add a
+feature, and `l1_training.py`'s `FEATURE_KEYS` tuple (which is itself a
+third hand-copy of the same five names, in a third file) stays trivially
+in sync with whatever `l1_policy.py` actually returns. Low urgency —
+today's formulas agree and no reported number is affected — but cheap to
+fix now versus expensive to notice after a future retrain silently drifts.
+
+---
