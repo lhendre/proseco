@@ -679,3 +679,94 @@ label-flip rate is unconfirmed. Worth prioritizing a re-check the next time
 Lucas is looking at retraining L1 or auditing the S1 v3 pipeline.
 
 ---
+
+## 2026-08-24 — Track B audit (fire N+6, commit f9e72d6 reviewed)
+
+Track A egress re-check this fire: still `EGRESS_BLOCKED` on `arxiv.org`
+(7/7 consecutive fires now, same error shape). No re-notify — already
+flagged to Lucas at the 3/3 mark, nothing new to report. Routed to Track B
+per the fallback rule (A and B tied oldest-touched at `e5c7254`; B wins the
+tie since C and D were both refreshed more recently, at `faae54f` and
+`f9e72d6`).
+
+`git diff 194bb4f HEAD -- l1_policy.py l1_training.py phase_b_pilot.py
+phase_b_evaluate.py llada/generate.py PHASE_B_PREREG_2026-08-22.md` is
+empty — no code changed since fire N+5, only `L1_FEATURE_IDEAS.md` and
+`MEMO_V4_SKELETON.md` (Track C/D). Findings #1–#2 fixed, #3–#10 still open
+and unchanged. Still no `phase_b/pilot.jsonl` or `v2.jsonl` in the tree —
+`s1/runs/` in this checkout holds only the same 15 pre-Phase-B files as
+every prior fire (checked: `total`/`withconf` counts per file are
+identical to fire N+2's tally, and none contain
+`predictor_conf_mean_active` — confirming again that this repo checkout
+never receives the confidence-logging data L1 actually trains on; that
+lives only on the EC2 box at the CLI's default `--runs_dir`).
+
+This fire looked at a part of `l1_training.py` no prior fire had examined:
+the train/test split itself, given both benchmarks are pooled into one
+`load_records()` call.
+
+### 11. MEDIUM — `l1_training.py`'s train/test split is grouped by
+`sample_id` but not stratified by benchmark, so the reported headline AUC
+can be composed of an arbitrary and unreported GSM8K/HumanEval mix
+
+```python
+X, y, g = make_X_y_g(recs)
+gss = GroupShuffleSplit(n_splits=1, test_size=0.2, random_state=42)
+train_idx, test_idx = next(gss.split(X, y, g))
+...
+auc = roc_auc_score(yte_np, probs)
+```
+
+`make_X_y_g` builds `g` from `r["sample_id"]` alone. Every record in
+`s1/runs/*.jsonl` also carries a `benchmark` field (confirmed in the
+checked-in reference files, e.g. `s1/runs/humaneval_20260810_064421.jsonl`
+line 1: `"sample_id": "HumanEval/0", "benchmark": "humaneval", ...`), but
+`load_records`/`make_X_y_g` never reads it — it isn't part of `X`, `y`, or
+`g`, and never enters the split. `GroupShuffleSplit` guarantees no
+`sample_id` (prompt) straddles the train/test boundary, which is the right
+guard against the leakage findings #1/#3 already cover — but it has no
+concept of benchmark as a second grouping axis, so with `random_state=42`
+fixed there is exactly one realized split, and nothing in the code checks
+or reports what fraction of the ~20% held-out *invocations* (not prompts)
+come from GSM8K vs. HumanEval. `sklearn` has no single splitter that does
+group-safety AND stratification simultaneously (`StratifiedGroupKFold`
+exists but isn't used here; `GroupShuffleSplit` alone can't stratify).
+
+**Why this matters beyond a cosmetic reporting gap:** `PHASE_B_L1_DESIGN.md`
+line 7 reports Phase A's linear-baseline edge as benchmark-asymmetric
+(`ΔAUC = +0.019 GSM8K / +0.033 HumanEval / +0.027 combined`) — HumanEval is
+where L1's edge over the scalar-confidence baseline is largest. If the one
+realized 80/20 split happens to under-represent HumanEval invocations in
+the *test* fold (plausible: HumanEval blocks are code, tend to run longer
+per prompt and have different invocation density than GSM8K's shorter CoT
+blocks, so invocation-level record counts don't split 50/50 by prompt-level
+group even under a "fair" random assignment), the reported
+`final_test_auc = 0.9589` in `l1_weights.json`'s `meta` block is a *number
+with no confidence interval and unknown per-benchmark composition* — it
+could be flattering GSM8K's easier separability, or diluting HumanEval's
+larger signal, or genuinely mixed representatively; there's no way to tell
+from what's saved. This is the exact number PHASE_B_L1_DESIGN.md cites as
+"matching the Phase A linear ceiling" and the exact number gating whether
+L1 was worth deploying to the EC2 pilot at all.
+
+**Recommend:** at minimum, log per-benchmark AUC alongside the pooled
+number in `state["meta"]` (`final_test_auc_gsm8k`, `final_test_auc_humaneval`,
+plus `n_test_invocations_gsm8k`/`_humaneval`) so a skewed split is visible
+after the fact without needing to retrain. For a real fix, either (a)
+split each benchmark's records independently with `GroupShuffleSplit`
+(80/20 by `sample_id` within GSM8K, separately within HumanEval, then
+concatenate the two train sets and the two test sets) so the test
+composition is fixed by construction rather than left to chance, or (b) at
+minimum try a few different `random_state` seeds for the current pooled
+split and report the AUC range — if it's tight, the current single-split
+number is fine as reported and this finding is moot in practice; if it
+swings meaningfully, the headline number needs the split-independence fix
+before the next retrain. Not flagging as HIGH: this doesn't invalidate the
+Phase B pilot's own accuracy/NFE measurements (those come from
+`phase_b_pilot.py` running the already-fixed `l1_weights.json` against
+held-out *prompts*, a separate and correctly-leakage-guarded population per
+finding #1/#3's `TRAIN_POOL_N` cutoff) — it's a question mark over how
+trustworthy the training-time AUC number is as a *selection criterion*,
+not a corruption of the deployed policy's live-tested behavior.
+
+---
