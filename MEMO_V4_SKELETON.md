@@ -18,6 +18,15 @@ folded in 4 newer `L1_AUDIT_FINDINGS.md` entries (#4-#7) into the "Known caveats
 below — #6 in particular affects the `l1_mlp:0.40` weights this run is testing and should be
 resolved before trusting that row.
 
+Re-checked 2026-08-24 ~06:26 UTC (Track D pass 5, routed here after Track A's 5th consecutive
+`EGRESS_BLOCKED`): `v2.jsonl` still hasn't landed anywhere in the tree (checked `phase_b/` and
+`s1/runs/` — only the same stale pre-v2 `s1/runs/*.jsonl` files as last pass, no new files). Did
+not re-fetch `MEMO_L1_REV4.html`/`LANDSCAPE.md` this pass (no network-derived delta to check them
+against, same reasoning as the prior no-op re-checks). Folded in `L1_AUDIT_FINDINGS.md` finding
+#9 (logged this fire, commit `47404b5`) into the caveats list below — flagged MEDIUM but, like
+#6, it's a fairness confound (not policy-neutral) rather than a simple accuracy bug, so it's
+placed near the top of the list rather than with the policy-neutral findings.
+
 **How to fill this in (<30 min):**
 1. `python phase_b_evaluate.py ~/proseco/phase_b/v2.jsonl` on the EC2 box (or wherever
    `v2.jsonl` lives once the run completes).
@@ -114,6 +123,19 @@ and matter more than the original #2/#3):
   no third split. Doesn't touch Phase B's downstream-accuracy numbers directly, but if Section 1-2
   text is copied verbatim from `MEMO_L1_REV4.html` as instructed above, add a one-line caveat next
   to the 0.9589 citation rather than presenting it as a clean held-out number.
+- **Finding #9 (MEDIUM, new 2026-08-24 — check before trusting the HumanEval accuracy
+  column across policies):** `humaneval_pass` extracts the FIRST fenced python code block via
+  `re.search`, the same first-match bug already fixed for GSM8K's `\boxed{}` parsing (#2 below)
+  but never applied to the HumanEval side. Unlike #7, this is NOT policy-neutral: if heavier
+  corrector invocation (`cadllm_linear:0.15`/`l1_mlp:0.40`) systematically leaves fewer stray/
+  duplicate fenced blocks than a lighter policy, first-match extraction scores policies
+  asymmetrically for a reason unrelated to actual solution correctness — undermining the fair
+  head-to-head this table exists to report. Not yet confirmed against real data (no v2.jsonl
+  landed as of this draft). Before citing the HumanEval row: grep `v2.jsonl`'s `gen_text` for
+  rows with more than one fenced-python-block occurrence and check whether that rate differs by
+  policy; if ~0 across all rows this is moot, if nonzero and policy-skewed the HumanEval numbers
+  need a rescore with a fixed (last-match, or `def {entry_point}`-matching) extractor before this
+  memo cites them.
 - Finding #2 (gsm8k boxed-answer parsing, first-match vs last-match): `phase_b_evaluate.py`
   auto-rescores from `gen_text` on load, so v2 numbers should already be correct — confirm the
   stdout printed `[eval] re-scored N/M rows` and note the count here if nonzero.
