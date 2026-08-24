@@ -27,6 +27,16 @@ against, same reasoning as the prior no-op re-checks). Folded in `L1_AUDIT_FINDI
 #6, it's a fairness confound (not policy-neutral) rather than a simple accuracy bug, so it's
 placed near the top of the list rather than with the policy-neutral findings.
 
+Re-checked 2026-08-24 ~14:2x UTC (Track D pass 6): `v2.jsonl` still hasn't landed anywhere in the
+tree (`phase_b/` still absent, `s1/runs/` unchanged since last pass). Re-cloned
+`remasking_test:research-ideation/LANDSCAPE.md` — most recent entry (commit `8a56216`, logging
+dLLM-Cache/DyLLM as a systems/caching BG paper) is not part of L1's pre-commit-eligibility or
+shape-vs-scalar-precedent clusters, so the Gate-8 competitor count (10) and the related-work
+paragraph below are still unchanged. Folded in `L1_AUDIT_FINDINGS.md` finding #10 (logged fire
+N+5, commit `e5c7254`) into the caveats list below, placed above #9 — it's higher-severity
+(MEDIUM/HIGH vs. MEDIUM) and, unlike #9, potentially affects the deployed `l1_mlp:0.40` weights
+themselves rather than just the HumanEval scoring path.
+
 **How to fill this in (<30 min):**
 1. `python phase_b_evaluate.py ~/proseco/phase_b/v2.jsonl` on the EC2 box (or wherever
    `v2.jsonl` lives once the run completes).
@@ -123,6 +133,23 @@ and matter more than the original #2/#3):
   no third split. Doesn't touch Phase B's downstream-accuracy numbers directly, but if Section 1-2
   text is copied verbatim from `MEMO_L1_REV4.html` as instructed above, add a one-line caveat next
   to the 0.9589 citation rather than presenting it as a clean held-out number.
+- **Finding #10 (MEDIUM/HIGH, new 2026-08-24 — check before trusting `l1_weights.json`/the
+  `l1_mlp:0.40` policy itself, not just this run's tables):** the S1 v3 instrumentation's
+  corrector-convergence check (`torch.allclose` on integer LLaDA token-id tensors,
+  `diffusion.py`) can silently misjudge two *different* token ids as "equal" once either id is
+  ≥100000 (roughly the top ~20% of the ~126k vocab, which is where `mask_id`/special tokens
+  live) — `torch.allclose`'s default `atol=1e-8, rtol=1e-5` tolerance is wide enough at that
+  magnitude to swallow an off-by-one id mismatch. `l1_training.py` uses this check's output
+  (`broke_at_step_1`, inverted) as the binary training label for the exact MLP
+  (`l1_weights.json`) deployed as `l1_mlp:0.40` in this run — a false positive mislabels a
+  corrector invocation that did real work as a no-op, corrupting the label in the direction that
+  hides the policy's actual behavior. **Not yet confirmed against real data** (no token-id field
+  logged in `s1/runs/*.jsonl` to check the false-positive rate directly, and no `torch.` runtime
+  available to reproduce the `allclose` call this fire — verified against PyTorch's documented
+  tolerance formula only). If this run's `l1_mlp:0.40` row disappoints and finding #6's dedup
+  confound has already been ruled out, this is the next thing to check before concluding the
+  feature set itself is at fault — a training-label integrity issue in the already-trained MLP,
+  not a bug in the Phase B pilot/eval scripts themselves.
 - **Finding #9 (MEDIUM, new 2026-08-24 — check before trusting the HumanEval accuracy
   column across policies):** `humaneval_pass` extracts the FIRST fenced python code block via
   `re.search`, the same first-match bug already fixed for GSM8K's `\boxed{}` parsing (#2 below)
