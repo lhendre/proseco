@@ -716,3 +716,148 @@ repeated here so the next pass doesn't have to scroll up): **#10 ≈ #15 ≈
 (bundle together, same live-hook change) → **block-position variant**
 (still lowest priority, documented overfit history). **#18** sits outside
 this ordering pending Lucas's call on the fairness question above.
+
+## 2026-08-24 18:2x UTC — Track C, seventh pass: fourth moment, spatial autocorrelation, cross-block carryover
+
+Track A stayed `EGRESS_BLOCKED` this fire (7/7 consecutive fresh probes,
+`arxiv.org/list/cs.LG/recent` — see `L1_LITERATURE.md`'s matching entry, no
+re-notify per standing guidance). Routing fell to the oldest-touched of
+B/C/D: `L1_AUDIT_FINDINGS.md` was just touched last fire (16:27 UTC),
+`MEMO_V4_SKELETON.md` at 14:26 UTC, `L1_FEATURE_IDEAS.md` (this file) at
+12:27 UTC — oldest, so Track C routes.
+
+Six passes so far (18 ideas, #1-#18) cover: rank/margin/agreement/vocab-
+entropy (pass 1), block-position (pass 2), margin + run-length (pass 3),
+the mean/std/skew moment family plus a cross-position correlation (pass
+4), top-k entropy/KL-dispersion/margin-std (pass 5), and within-block
+temporal deltas + a budget-state feature (pass 6). Three gaps remain that
+no prior pass touched: the confidence distribution's fourth moment, its
+*spatial* (within-block, single-step) structure rather than its shape or
+its temporal (across-step) structure, and any signal that crosses a block
+boundary rather than staying within one invocation or one sample's history.
+
+### 19. Excess kurtosis of active-position top-1 confidence (`predictor_conf_kurtosis_active`) — cheapest, category (1)
+
+Closes the moment family pass 4 started (`_std`, `#11` skew) but stopped
+one short of. Kurtosis measures tail weight / peakedness independent of
+what std and skew already capture: two blocks can have identical mean,
+std, and skew but different kurtosis if one has a few extreme low-
+confidence positions buried in an otherwise uniform mid-confidence spread
+(heavy-tailed) versus the same spread with no such outliers
+(platykurtic). That's a distinct failure signature from "generally
+uncertain" (`_mean`/`_std`) or "lopsided" (`_skew`, #11) — a handful of
+near-zero-confidence tokens in one block is exactly the kind of local
+catastrophic-miss pattern the corrector exists to catch, and it can hide
+inside an unremarkable mean/std/skew reading.
+
+```python
+from scipy.stats import kurtosis
+conf = top1_probs[active_mask]  # same tensor #8/#10/#11 already slice
+predictor_conf_kurtosis_active = float(kurtosis(conf.numpy(), fisher=True, bias=False))
+```
+
+Same cost tier as #10/#11/#12 — reuses the exact `conf` slice already
+computed for the frozen five features, one more `scipy.stats` call. No new
+instrumentation; computable from existing v2/v3 JSONL logits if raw
+per-position confidences were retained, otherwise needs the live `pp`
+tensor at invocation time same as #10-#15 (check before assuming
+retrainable on old data — flag for whoever picks this up to confirm
+against what's actually saved per-record in `s1/runs/*.jsonl`, same caveat
+pass 4/5 raised and this pass didn't re-verify given the time cap).
+
+### 20. Lag-1 spatial autocorrelation of top-1 confidence over active positions (`predictor_conf_spatial_autocorr_active`) — moderate, category (1)+(3)-adjacent
+
+Distinct from #9 (contiguous low-confidence run length, a threshold-based
+count) and from `_std`/kurtosis (both permutation-invariant — they don't
+see position order at all). Two blocks with identical multiset of
+confidence values can have very different spatial structure: one clustered
+(low-confidence positions bunched together — high positive autocorrelation,
+also likely to trip #9's run-length stat) versus one alternating
+(high/low/high/low — near-zero or negative autocorrelation, but #9 sees no
+long run and might miss it entirely if no single run clears its length
+threshold). Autocorrelation is continuous and catches the alternating
+case #9 structurally cannot.
+
+```python
+def lag1_autocorr(x: np.ndarray) -> float:
+    if len(x) < 3:
+        return 0.0  # degenerate block, same active_mask_size==1/2 guard #9 needs
+    x0, x1 = x[:-1] - x.mean(), x[1:] - x.mean()
+    denom = np.sqrt((x0 ** 2).sum() * (x1 ** 2).sum())
+    return float((x0 * x1).sum() / denom) if denom > 0 else 0.0
+
+predictor_conf_spatial_autocorr_active = lag1_autocorr(conf.numpy())
+```
+
+Ordering-dependent, unlike every other feature in the frozen five plus
+#1-#18 except #9 — worth flagging explicitly since it's a small but real
+mechanism-space expansion (uses position *order* within the block, not
+just the multiset of values or absolute block position like #4's
+EOS-distance feature). Same degenerate-block edge case #9 already handles
+(`active_mask_size` 0/1/2) needs the same guard here.
+
+### 21. Previous block's final active-position mean confidence, carried into this block's feature vector (`prev_block_final_conf_mean`) — moderate-to-expensive, category: new (cross-block), needs live-hook state
+
+Every idea in passes 1-6 (including #16/#17's temporal deltas) is scoped
+to a single block: either one invocation's snapshot, or a delta against
+the previous *step* inside the same block. None carry information across a
+block boundary. If the predictor exits block N confidently, that's mild
+evidence the model is "on a roll" for block N+1's early steps too — models
+don't reset generation quality at block boundaries even though ProSeCo's
+corrector-invocation decision currently does (each block's `active_mask`
+and hence the frozen five features start fresh at `block_start`). Whether
+that carryover signal is real or just autocorrelated noise from adjacent
+generation quality is an open empirical question, not asserted here.
+
+Feasibility, checked against `llada/generate.py`'s block loop
+(`for block_idx in block_pbar:` at line 168, `active_region_start`/
+`block_end` recomputed each iteration at lines 169-170): the previous
+block's final predictor confidence is available for free at zero
+additional forward-pass cost — it's just the last computed `pl`/`top1_probs`
+slice before the loop moves to `block_idx + 1`, needs one variable
+(`prev_block_conf_mean = None` initialized before the loop, updated at the
+end of each `block_idx` iteration) threaded through the loop body. For
+`block_idx == 0` there is no previous block — needs an explicit sentinel
+(e.g. `0.0` with a paired `is_first_block` flag, or drop `block_idx == 0`
+records from training the way #4's EOS-distance feature already has to
+handle the last-block edge from the other end) rather than a silent
+default that could get confused with a genuinely low carried-over
+confidence.
+
+**Caveat worth flagging up front, in the same spirit as #18's fairness
+question:** this is state that persists *within one generation*, not
+across generations or samples — it does not raise the leakage concerns
+`L1_AUDIT_FINDINGS.md` findings #1/#3 cover (those are about `sample_id`
+crossing the train/test split; `prev_block_final_conf_mean` never crosses
+a sample boundary, it resets at `block_idx == 0` for every new generation
+same as the frozen five do). No fairness conflict with `cadllm_linear` or
+`fixed` either, unlike #18 — both other policies could trivially compute
+the same carried scalar from their own inputs (`cadllm_linear` already
+reduces to a single mean-confidence number; `fixed` ignores features
+entirely and stays budget-blind regardless). Flagging this explicitly
+because #18's fairness question is still open with Lucas and it would be
+easy to conflate "any feature using cross-invocation state" with #18's
+actual problem, which is specifically about *budget* state, not sequence
+state in general.
+
+### Updated running priority (21 ideas total across seven passes)
+
+Trainable-today tier, same ordering as pass 6's list, kurtosis (#19) and
+spatial autocorrelation (#20) slot in near the existing moment/shape
+cluster since they're the same cost tier and reuse the same `conf` slice:
+**#10 ≈ #15 ≈ #3 ≈ #8** → **#19 ≈ #20** → **#13** → **#11** → **#12** →
+**#14** → **#9** → **#2** → **#1**. New-instrumentation tier unchanged:
+**#16 ≈ #17** → **#21** (cheapest of the three new-instrumentation ideas —
+zero extra forward-pass cost, just state threading — but still needs the
+same live-hook change #16/#17 need before any of the three are trainable
+on existing data) → **block-position variant** (still lowest, documented
+overfit history). **#18** still sits outside this ordering pending Lucas's
+fairness-question call from pass 6.
+
+**Next fire on Track C**, if routing lands here again: all three
+easy-signal categories from the original brief (moment/shape, spatial,
+temporal/cross-block) now have at least one entry; a fresh pass would need
+to either go deeper on one of those three or open a genuinely new category
+— worth checking whether any prior pass considered corrector-side signals
+(what the *corrector* proposed, not just what the predictor's confidence
+looked like going in) before assuming there's nothing left.

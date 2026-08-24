@@ -213,3 +213,21 @@ corrupting the `broke_at_step_1` label `l1_training.py` trains on).
 **Next fire:** if Track A stays blocked again, route to whichever of B/C/D
 is then oldest-touched — after this fire that'll be Track C
 (L1_FEATURE_IDEAS.md, 04:26 UTC) unless D gets touched again first.
+
+## 2026-08-24 18:2x UTC — Track A 7th re-check, still blocked (no re-notify)
+
+Single fresh probe per standing guidance (full sweep already established
+3/3 and notified; no need to repeat until unblocked):
+
+- `arxiv.org/list/cs.LG/recent` — `EGRESS_BLOCKED`, identical error shape
+  to all six prior fires.
+
+7/7 consecutive. No re-notify (Lucas already told once at the 3/3 mark;
+nothing new here). Routed to Track C (oldest-touched of B/C/D at 12:27 UTC,
+ahead of D's 14:26 and B's 16:27) — see `L1_FEATURE_IDEAS.md`'s seventh
+pass, three new proposals (#19-#21).
+
+**Next fire on Track A:** same as before — single probe suffices; full
+four-source sweep only on unblock. By the routing rule the next fire
+should land on Track D (`MEMO_V4_SKELETON.md`, 14:26 UTC) unless Track A
+unblocks first, since this fire touched C.
