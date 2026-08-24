@@ -1,13 +1,3 @@
-# L1 Feature Ideas
-
-Track C (feature engineering proposals) log. Append-only, dated entries.
-Proposals only — nothing here is implemented. Current L1 MLP AUC (0.9589)
-matches the Phase A linear ceiling on the frozen 5-feature set
-(`predictor_conf_{mean,min,std}_active`, `predictor_entropy_{mean,max}_active`);
-these are candidates to push past that ceiling, not swap it out.
-
----
-
 ## 2026-08-23 — Track C, first entry
 
 Scope read: `l1_policy.py`, `l1_training.py`, `PHASE_B_L1_DESIGN.md`,
@@ -314,8 +304,8 @@ Cheapest / no new instrumentation / no threshold parameter first:
 **#3 (pooled-vocab entropy) ≈ #8 (top1-top2 margin)** → **#9 (contiguous
 low-conf run, needs a τ)** → **#2 (agreement-rate-so-far, needs live-hook
 statefulness)** → **#1 (rank-within-recent-blocks, needs new
-per-position instrumentation to do properly)** → **block-position variant
-(lowest priority, documented overfit history on this exact problem class)**.
+per-position instrumentation)** → **block-position variant (lowest
+priority, documented overfit history on this exact problem class)**.
 Not re-deciding this ordering from scratch each pass — flagging here so the
 next Track C fire building on this file starts from "what hasn't been tried
 yet" rather than re-deriving the same four brief-listed motivations a third
@@ -430,3 +420,143 @@ report single-feature AUC separately)** → **#9 (contiguous run, needs τ)**
 **block-position variant (lowest priority, documented overfit history)**.
 No implementation done here per the routine brief — this file stays
 proposals-only.
+
+---
+
+## 2026-08-24 — Track C, fifth pass: two moment/shape statistics from #10-#12 pushed further, plus one genuinely new signal (top-k truncated entropy)
+
+Checked this file wasn't touched more recently than the other three tracked
+files before starting (per the routine's track-selection heuristic) — this
+file's last entry was 2026-08-23 22:25 UTC, oldest of the four as of this
+fire. Re-read `features_from_predictor_logits` (`l1_policy.py:102-135`)
+again against all 12 prior ideas before proposing anything, specifically
+looking for statistics that aren't just "the next moment" of `t` or `e`
+individually (passes 4-5 risk diminishing returns there) but instead use
+`pp` (the full per-position distribution) in a way none of #1-#12 do — only
+`t` (top1) and `e` (scalar entropy) have been mined so far; `pp` itself
+(the full softmax vector, pre-reduction) has not.
+
+### 13. Top-k truncated, renormalized entropy over active positions (`predictor_topk_entropy_mean_active`, k=5) — category: (1), cheap, uses `pp` directly
+
+`entropy_mean_active` (existing) and `#3`'s pooled-vocab entropy both use
+the **full** vocabulary distribution, which for a ~50k-entry vocab means
+entropy is often dominated by how much probability mass sits in a long,
+low-value tail that has nothing to do with which of the *plausible*
+candidates the corrector might pick. Margin (#8) goes to the opposite
+extreme and looks at only the top-2. Neither is "uncertainty among the
+tokens that actually matter": a position with top-5 probabilities
+`[0.3, 0.25, 0.2, 0.15, 0.1]` (genuinely torn between ~5 real candidates)
+and a position with top-5 `[0.3, 0.05, 0.04, 0.03, 0.02]` and the rest of
+its mass spread over 49995 near-zero tail entries can have *similar* full
+entropy (the second position's huge tail inflates its entropy to look like
+the first) but describe completely different situations for the corrector
+— the first is a genuine multi-way call, the second is confidently
+top-1-ish with numerical noise in the tail.
+
+Proposed: take `pp.topk(5, dim=-1).values` (already adjacent to the
+existing `pp.max(dim=-1)` call and to #8's proposed `topk(2, ...)` — if #8
+is implemented first, this reuses the same `topk` call with `k=5` instead
+of `k=2`), renormalize those 5 values to sum to 1, compute entropy of the
+renormalized 5-way distribution per position, then mean over active
+positions. This is bounded in `[0, ln(5)]` regardless of vocab size, unlike
+full entropy which has a much larger effective range dominated by tail
+mass — so it's also more numerically comparable across positions/samples
+than the existing `entropy_mean_active`, independent of whether it adds
+AUC.
+
+**Why this isn't redundant with #3 or #8:** #3 (pooled-vocab entropy) pools
+information *across positions*, this pools *across the top-k tokens within
+one position* — orthogonal axis. #8 (margin) only looks at 2 tokens and
+only their gap, not the shape of the remaining top-k mass (e.g. margin
+can't distinguish `[0.4, 0.35, 0.2, 0.05]` from `[0.4, 0.35, 0.1, 0.1,
+0.05]` — same top1/top2, different k=5 entropy). k is an open parameter
+(flagged like #9's τ) — 5 is a reasonable starting guess (small enough to
+exclude tail noise, large enough to catch real multi-way ties) but should
+be treated as a hyperparameter to sweep, not a fixed choice, before
+trusting a specific k's AUC number over another.
+
+### 14. Mean per-position KL divergence to the block's pooled mean distribution (`kl_to_pooled_mean_active`) — category: (1)+(3), moderate, uses `pp` directly
+
+#3 computes entropy of the *average* distribution (`pp[am].mean(dim=0)`),
+a single scalar describing how concentrated the block's aggregate belief
+is. It does not describe how much individual positions' distributions
+*disagree* with that aggregate — two blocks can have the same pooled-mean
+entropy while one has every position closely tracking the mean (low
+per-position dispersion) and the other has positions each concentrated on
+different, mutually exclusive tokens that happen to average out to the same
+pooled shape (high dispersion). This is a distinct question from #12's
+`corr(t, e)`, which relates two already-reduced *scalars* per position, not
+the *distributions* themselves.
+
+Proposed: `pooled = pp[am].mean(dim=0)` (the same tensor #3 already
+computes en route to its entropy), then for each active position `i`,
+`KL(pp[i] || pooled)`, averaged over active positions. Reuses #3's `pooled`
+tensor exactly — if #3 is implemented, this is one extra reduction on data
+already computed, not a new pass over `pp`.
+
+**Concrete failure mode this could catch:** a block where every active
+position is torn between the *same* two tokens (e.g. singular/plural
+agreement repeated across several positions in a sentence) has low
+KL-to-pooled-mean (each position's distribution closely resembles the
+average, since they're all doing the same thing) — a coherent, likely
+one-shot-fixable pattern. A block where position 3 is confidently choosing
+token A, position 7 is confidently choosing token B, and position 12 is
+confidently choosing token C (three different, mutually confident but
+locally-uncertain-relative-to-block-pattern choices that happen to pool
+into a diffuse average) has high KL-to-pooled-mean despite potentially
+similar `entropy_mean_active` and pooled-entropy (#3) values to the first
+case. #3 alone cannot distinguish "everyone agrees on the ambiguity" from
+"everyone is confidently ambiguous about different things."
+
+Cost note: this is the most expensive of the three proposed this pass — a
+per-position KL computation is `O(active_mask_size × vocab_size)`, same
+order as computing `e` already is, so not prohibitively different in
+compute, but conceptually the least "pure single extra line" of the three
+(#13's topk entropy and #15 below are both cheaper to reason about in
+isolation).
+
+### 15. Std of the top1-top2 margin over active positions (`predictor_margin_std_active`) — category: (1), cheapest of the three, extends #8
+
+Pass 3's margin proposal (#8) kept mean and min, following the same
+mean/min pattern as the original `predictor_conf_{mean,min}_active` — but
+per pass 4's own logic for #10 (closing the mean/std asymmetry between the
+confidence and entropy branches), margin has the identical gap: mean and
+min but no spread statistic. `margin_std_active` = std of
+`(top1_prob - top2_prob)` over active positions, guarded to 0.0 at
+`n_active <= 1` exactly like every other std feature in this file.
+
+Motivation, following the same shape-not-just-level argument used for #10
+and #11: two blocks can share the same mean and min margin while one has
+uniformly middling margins across all positions (low std — a consistently
+semi-confident block) and the other has a mix of very-confident (large
+margin) and near-tied (small margin) positions averaging to the same mean
+(high std — a block with a real hard subset embedded in an otherwise easy
+one). This is the same "outlier subset vs. uniform mediocrity" distinction
+#11's skewness proposal makes for raw confidence, applied to margin instead
+— a different underlying quantity, not a restatement of #11.
+
+**Priority this pass:** try **#15 first** (cheapest — one extra `.std()`
+call directly analogous to three already-justified precedents in this file:
+`predictor_conf_std_active`, #10's `entropy_std_active`, if implemented,
+and #8's margin itself), then **#13** (needs a k sweep but is a pure
+function of `pp` with no cross-invocation state), then **#14** (correct but
+the most compute and the least "obviously additive" of the three — best
+tried only after #13 and #3 have been evaluated, since it reuses #3's
+`pooled` tensor and its marginal value over #3 alone is the open question).
+
+### Updated running priority (15 ideas total across five passes)
+
+**#10 (entropy_std) ≈ #15 (margin_std, this pass) ≈ #3 ≈ #8** (all
+one-line-or-near, no threshold, no new instrumentation) → **#13 (top-k
+truncated entropy, needs a k sweep)** → **#11 (skewness)** → **#12
+(conf-entropy correlation)** → **#14 (KL-to-pooled-mean, this pass — most
+compute, reuses #3's tensor, evaluate after #3)** → **#9 (contiguous run,
+needs τ)** → **#2 (agreement-rate-so-far, needs live-hook statefulness)**
+→ **#1 (rank-within-recent-blocks, needs new per-position
+instrumentation)** → **block-position variant (lowest priority, documented
+overfit history)**. No implementation done here per the routine brief —
+this file stays proposals-only. Next Track C pass should check this
+priority list before re-deriving moments/shapes of `t` or `e` a third or
+fourth time — the remaining unexplored axis after this pass is genuinely
+cross-invocation state (#1, #2) and `pp`-based joint statistics like #14,
+not another single-array summary statistic.
