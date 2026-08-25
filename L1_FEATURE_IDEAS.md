@@ -1218,3 +1218,101 @@ likely): the docstring for `s1_log` already promises
 keys that pass 9 and this pass both found are not actually written into
 `rec` — either the docstring is stale or the write was dropped; worth
 confirming which before anyone builds #26 assuming the docstring is current.
+
+---
+
+## 2026-08-25 — Track C, eleventh pass: triage note, plus two combination features
+
+Ten passes, 27 proposed features, zero implemented (by design — this track
+is proposal-only). That ratio is worth naming plainly before adding more:
+every single-invocation statistical shape of `t`/`e`/`pp` that's cheap to
+compute (mean/min/std/skew/kurtosis, margin, rank, pooled/top-k/KL entropy,
+spatial autocorrelation) now has an entry, and most of the remaining
+unexplored ground (#1, #16/#17, #21, #26) is gated on new S1 instrumentation
+that hasn't landed. Generating a 28th single-array statistic from that same
+well is low marginal value relative to what Phase B's pilot data will
+actually need once it lands: a validated pick from the existing list, not a
+longer list. Recording that read here rather than manufacturing another
+moment statistic to hit a quota.
+
+**If Lucas is looking for where to start once pilot data lands:** the
+cheapest-and-most-orthogonal tier (**#10, #15, #3, #8, #27, #19, #20** — all
+one-`torch`-call, no new instrumentation, no threshold) is the obvious first
+ablation batch precisely because it's free to compute against v2/v3 JSONL
+already collected — no reason to wait for a new S1 run to at least measure
+whether any of these seven move AUC before spending effort on the
+instrumentation-gated tier (#1/#16/#17/#21/#22/#23/#24/#25/#26).
+
+Two proposals this pass, both explicit **combinations of already-proposed
+features** rather than new raw statistics — a different kind of idea than
+passes 1-10, motivated by the AUC-ceiling framing in the routine brief: with
+a small hidden layer (5→16→1) and Phase B's still-modest N, an MLP may not
+reliably discover a useful nonlinear combination of two flat features on its
+own; handing it a pre-computed interaction can be more sample-efficient than
+hoping two separate scalars let it find the same relationship.
+
+### 28. Correction magnitude per unit effort, sample-so-far (`correction_magnitude_per_effort_so_far`) — combination of #22 and #23, cheap, category (2)
+
+`correction_magnitude_mean_so_far` (#22) and `correction_effort_mean_so_far`
+(#23) are proposed separately in pass 8 as two raw scalars the MLP would
+receive independently. Proposed: also compute their ratio,
+`#22 / max(#23, 1.0)` — "how much does the corrector change per iteration it
+spends," a single number distinguishing "efficient large rewrites" (high
+magnitude, low effort) from "slow grinding toward a small fix" (low
+magnitude, high effort) without requiring the MLP to learn that division
+from two inputs and a small hidden layer. Cold-start: `0.0`, consistent with
+#22's cold-start (no assumed magnitude with no evidence). Same live-hook
+cost tier as #22/#23 — not a new state requirement, a post-hoc combination
+if both are already being tracked.
+
+**Caveat:** only worth adding once #22 and #23 are themselves validated
+individually (same ordering discipline pass 9 already applied to #25) —
+proposing a ratio of two unvalidated signals compounds an unproven
+hypothesis rather than testing a new one.
+
+### 29. Within-block confidence trend since block start (`predictor_conf_trend_since_block_start`) — new but narrow-scope temporal signal, category: new (temporal), cheaper state than #16/#17
+
+Distinct from #16/#17 (step-to-step delta, needs the *previous step's* full
+tensor retained) and from #21 (previous *block's* final value): this
+compares the current step's `predictor_conf_mean_active` against the value
+recorded at this block's *first* predictor step, i.e. a single scalar
+(`first_step_conf_mean`) held for the duration of one block's `while` loop,
+reset at each new `block_idx` — cheaper state to carry than #16/#17's
+full previous-step tensor, since only one number needs to survive across
+steps. `predictor_conf_trend_since_block_start = current_mean -
+first_step_conf_mean` (positive = block has gotten more confident since it
+started, negative = degrading). First step of a block: `0.0` (no trend yet),
+same convention as #16.
+
+Motivation: distinguishes "this block started hard and is still hard"
+(trend ≈ 0, low absolute confidence) from "this block started hard but is
+resolving on its own" (trend positive, low absolute confidence) — the
+frozen five features and #1-#28 can express *that* a block is currently
+low-confidence but not *whether* it's already trending toward resolution
+without correction, which is a different question from #16/#17's per-step
+noise-vs-signal framing (this is block-scoped drift, not step-scoped
+volatility). Same instrumentation tier as #16/#17/#21/#24 (needs a new S1
+per-step logging change to train on, not just live-hook state) — not free,
+flagged consistently with how #16/#17 were flagged in pass 6.
+
+### Updated running priority (29 ideas total across eleven passes)
+
+No change to the trainable-today or new-instrumentation tiers' relative
+order; #28 and #29 slot in as follows. Trainable-today tier unchanged:
+**#10 ≈ #15 ≈ #3 ≈ #8 ≈ #27** → **#19 ≈ #20** → **#13** → **#11** → **#12** →
+**#14** → **#9** → **#2** → **#1**. New-instrumentation tier: **#24** →
+**#16 ≈ #17 ≈ #29** (same live-hook/S1-logging cost as #16/#17, #29 slightly
+cheaper in state size) → **#2 ≈ #22 ≈ #23** → **#28 (only after #22/#23
+validated)** → **#25 (only after #2/#22/#23 validated)** → **#21** →
+**block-position variant** (lowest, documented overfit history). **#26**
+stays blocked on new S1 instrumentation. **#18** stays outside this ordering
+pending Lucas's fairness-question call from pass 6.
+
+No implementation done here per the routine brief — this file stays
+proposals-only.
+
+**Next fire on Track C**, if routing lands here again: recommend triage over
+further generation — check whether Phase B pilot data has landed
+(`v2.jsonl`/pilot output referenced in `MEMO_V4_SKELETON.md`'s tracked
+status) and, if so, this track's highest-value next action is validating
+the trainable-today tier against it, not proposing idea #30.
