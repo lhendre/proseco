@@ -301,3 +301,21 @@ finding #14).
 **Next fire on Track A:** same as always — single probe, log briefly here,
 fall through to whichever of B/C/D is then oldest-touched (after this
 fire, that is Track B at 10:26 UTC, unless C or D get touched again first).
+
+## 2026-08-25 16:2x UTC — Track A 13th re-check, still blocked (no re-notify)
+
+Single fresh probe: `arxiv.org/list/cs.LG/recent` — `EGRESS_BLOCKED`,
+identical error shape to all twelve prior fires. 13/13 consecutive, ~38h
+since the last full sweep. No re-notify (same standing fact as every
+prior re-check entry; nothing about the block itself has changed).
+
+Routing: `L1_AUDIT_FINDINGS.md` was touched last at 10:26 UTC (Track B
+fire N+9), `L1_FEATURE_IDEAS.md` at 12:29 UTC (Track C pass 10),
+`MEMO_V4_SKELETON.md` at 14:27 UTC (Track D pass 10) — Track B was
+oldest-touched of B/C/D, so this fire routed to Track B. See that
+file's fire N+10 entry (re-verified findings #1-14, no new finding this
+pass).
+
+**Next fire on Track A:** same as always — single probe, log briefly here,
+fall through to whichever of B/C/D is then oldest-touched (after this
+fire, that is Track C at 12:29 UTC, unless B or D get touched again first).

@@ -1107,3 +1107,47 @@ computing. Flagging here so it's in the trail if Yair or Cornell asks "why
 both benchmarks" and the answer isn't otherwise written down.
 
 ---
+
+## 2026-08-25 — Track B audit (fire N+10, commit 4b5abe1 reviewed)
+
+No code changed since fire N+9 (`git log c65d8e1..HEAD -- l1_policy.py
+l1_training.py phase_b_pilot.py phase_b_evaluate.py llada/generate.py
+PHASE_B_PREREG_2026-08-22.md` is empty — only `L1_LITERATURE.md`,
+`L1_FEATURE_IDEAS.md`, and `MEMO_V4_SKELETON.md` changed in between, from
+Track C/D/A fires). Findings #1–#2 fixed, #3–#14 still open and
+unchanged, re-confirmed by re-reading current file contents, not just
+diffing. Still no `phase_b/pilot.jsonl` on the repo side (Lucas runs
+Phase B directly on EC2; nothing to rescore yet).
+
+Re-read three areas not previously called out as reviewed in their own
+right, looking specifically for (d) matched-FLOPs/NFE accounting bugs and
+fresh instances of (c) fair-comparison gaps:
+
+- `get_num_transfer_tokens` (`llada/generate.py` lines 41-57): integer
+  division of the per-block mask count across steps, remainder
+  distributed to the first `rem` steps. Same for every policy (called
+  once per block before the corrector-decision loop, independent of
+  `corrector_policy`) — no fairness or accounting issue.
+- `l1_policy.load_policy` dispatch (`l1_policy.py` lines 138-183): the
+  `l1_mlp:PATH:THRESH` parsing heuristic (`is_thresh` — last colon-chunk
+  treated as a threshold if it parses as a float in [0,1]) would
+  misparse a weights path whose filename looks like a bare float in that
+  range (e.g. `l1_mlp:/tmp/0.5:0.40` still works, but a path *ending* in
+  something like `.../l1_weights_0.4.json` split on the last `:` doesn't
+  hit this because there's no `:` inside the path itself — the ambiguity
+  requires an actual colon in the filename, which none of the current
+  weights paths have). Not filing as a finding: no realistic path in
+  this repo triggers it, and it's a parsing footgun rather than a result-
+  affecting bug.
+- `phase_b_pilot.py` `main()` wiring (full re-read, not just the CLI-
+  defaults slice finding #1 already covers): `temperature=0.0` and
+  `remasking="low_confidence"` are hardcoded identically for every
+  policy/benchmark in `run_one` (line 167-168) — confirmed shared, not a
+  fairness gap. Resume-dedup key is `(policy_spec, bench, s["id"])`
+  (line 254/263) — matches the row's own written keys exactly, so
+  finding #13's crash risk aside, the dedup logic itself is sound.
+
+No new finding this pass. 9 fires deep into a 14-finding list on
+unchanged code — diminishing returns are expected; flagging explicitly
+that this was a genuine fresh read of previously-under-covered code
+paths, not a rubber-stamp re-verify.
