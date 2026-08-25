@@ -893,3 +893,117 @@ today's formulas agree and no reported number is affected — but cheap to
 fix now versus expensive to notice after a future retrain silently drifts.
 
 ---
+
+## 2026-08-25 — Track B audit (fire N+8, commit 27c7e69 reviewed)
+
+Track A egress re-check this fire: still `EGRESS_BLOCKED` on `arxiv.org`
+(9/9+ consecutive, per `L1_LITERATURE.md`'s own log). No re-notify, not
+this fire's track.
+
+Routed to Track B per the fallback rule: `L1_AUDIT_FINDINGS.md` (this
+file) was last touched at fire N+7 (`c271205`, 2026-08-24 22:26:52Z),
+older than `L1_FEATURE_IDEAS.md` (`5fc6b3d`, 00:26:16Z) and
+`L1_LITERATURE.md`/`MEMO_V4_SKELETON.md` (both `27c7e69`, 02:26:39Z).
+
+`git diff c271205 HEAD -- l1_policy.py l1_training.py phase_b_pilot.py
+phase_b_evaluate.py llada/generate.py PHASE_B_PREREG_2026-08-22.md
+l1_weights.json` is empty — no code or weights changed since fire N+7;
+the intervening commits are Track A/C/D file-only changes. Findings
+#1–#2 fixed, #3–#12 still open and unchanged. `s1/runs/` still holds the
+same 15 pre-Phase-B files as every prior fire; no `phase_b/pilot.jsonl` or
+`v2.jsonl` anywhere in the tree — the EC2 pilot still hasn't landed data
+into this checkout.
+
+This fire read `s1/run_s1.py` in full for the first time (imported into
+`phase_b_pilot.py` for `GSM8K_PROMPT`/`HUMANEVAL_PROMPT`/
+`_patch_llada_for_bnb`, but never itself reviewed by a prior Track B
+fire — confirmed via `grep -n "run_s1" L1_AUDIT_FINDINGS.md` returning
+only one incidental mention). Two results, one confirmatory and one new.
+
+**Confirmatory, strengthens finding #3:** `run_s1.py`'s `load_benchmark`
+generates GSM8K training ids as `f"gsm8k_{i}"` for `i` in
+`0..n_samples-1` over `ds.shuffle(seed=seed).select(range(n_samples))`.
+`phase_b_pilot.py`'s `load_benchmark` generates held-out ids as
+`f"gsm8k_{start+i}"` over `ds.shuffle(seed=seed).select(range(start,
+start+n))` on a freshly-loaded, unfiltered `openai/gsm8k` test split.
+Because `.select()` only slices the *already-shuffled* dataset and both
+call sites shuffle with the same `seed=0` on the same unmodified split,
+the id numbering is structurally guaranteed to line up — id `gsm8k_100`
+in one script refers to the same shuffled-position-100 example in the
+other, not just coincidentally. This closes part of finding #3's
+uncertainty: the `TRAIN_POOL_N=100` cutoff isn't just "the numbers happen
+to check out" (the meta-count argument finding #3 originally relied on)
+but is backed by matching index-generation logic in both scripts. It does
+**not** close finding #3 fully — nothing still stops a future retrain
+from picking up `s1/runs/` files from a differently-configured collection
+run (e.g. a run using a different `--checkpoint`/tokenizer where
+`.shuffle(seed=0)` on the *same* dataset name could in principle still
+diverge if the HF `datasets` cache or library version changed the shuffle
+algorithm between collection and Phase B — unverified, not tested here).
+Finding #3's original recommendation (assert the invariant explicitly
+rather than rely on matching logic across two files) still stands.
+
+### 13. MEDIUM — `phase_b_pilot.py`'s resume path has no defense against a
+truncated trailing line, so a mid-write crash turns a resumable pilot run
+into one that crashes on every restart
+
+`phase_b_pilot.py` lines 250–255:
+
+```python
+done = set()
+if out_path.exists():
+    for line in open(out_path):
+        r = json.loads(line)
+        done.add((r["policy"], r["benchmark"], r["id"]))
+    print(f"[phase_b] resuming, {len(done)} rows already done")
+```
+
+runs unconditionally on every launch when `--out` already exists — this is
+the resume mechanism the whole script is built around (the module
+docstring frames the run as potentially many hours on a single T4, and the
+main loop's `if (policy_spec, bench, s["id"]) in done: continue` is the
+only thing that makes re-launching after an interruption cheap instead of
+starting over).
+
+Each row is written by `run_one`'s caller as
+`f.write(json.dumps(row) + "\n"); f.flush()` (lines 266–267). `gen_text`
+is truncated to 4096 chars but the rest of the row (`id`, `benchmark`,
+`policy`, NFE counts, `wall_s`, `gen_len`) pushes a single line to
+several KB for HumanEval rows. `flush()` only moves Python's buffer into
+the OS's page cache — it doesn't make the underlying `write()` atomic, and
+a multi-KB line is not guaranteed to land in the file as a single
+uninterruptible syscall. If the process is killed (T4 spot-instance
+reclaim, OOM-killer on a long int8 run, `Ctrl-C`, CUDA driver reset)
+while that `write()` is in flight, the file can end with a partial JSON
+line — no trailing `\n`, or a truncated `{"id": "gsm8k_142", "benchm`.
+
+On the next launch, the resume-scan above has no `try/except` around
+`json.loads(line)`. A truncated trailing line raises
+`json.JSONDecodeError` and crashes `main()` before a single new sample
+runs — turning what should be "restart and pick up where it left off"
+into "delete or hand-truncate the last line of a multi-hour run's output
+file before it will resume at all." On an unattended EC2 box this is the
+difference between an interruption costing a few minutes (re-launch,
+resume) and costing the entire run (crash loop on relaunch, or all prior
+progress discarded if the fix is `rm pilot.jsonl` under time pressure).
+
+Distinct from findings #1–#12: this is a crash-recovery/availability gap,
+not a silent-wrong-number bug — the failure mode is a loud crash on
+restart, not a corrupted metric. Flagging MEDIUM (not HIGH) because nothing
+today indicates it has actually fired — `phase_b/pilot.jsonl` isn't in
+this checkout to inspect, and the EC2 pilot may simply not have been
+interrupted yet — but the run is long-running exactly on the kind of
+hardware (T4, likely spot or at least long-wall-clock) where a mid-write
+kill is a real possibility, not a hypothetical.
+
+**Recommend:** make the resume-scan tolerant of a truncated final line —
+e.g. wrap the per-line `json.loads` in `try/except
+json.JSONDecodeError`, and for the *last* line specifically, either skip
+it silently (its row is incomplete, so re-running that one sample is
+correct and cheap) or truncate the file to drop it before reopening in
+append mode. A minimal version: catch the exception only on the last line
+read; any decode error on a non-last line is a different, worse problem
+(mid-file corruption) worth failing loudly on instead of silently
+skipping.
+
+---
