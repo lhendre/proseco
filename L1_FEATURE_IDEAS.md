@@ -861,3 +861,134 @@ to either go deeper on one of those three or open a genuinely new category
 — worth checking whether any prior pass considered corrector-side signals
 (what the *corrector* proposed, not just what the predictor's confidence
 looked like going in) before assuming there's nothing left.
+
+## 2026-08-25 — Track C, eighth pass: corrector-side historical signals (the genuinely-new category flagged at the end of pass 7)
+
+Re-read `llada/generate.py:296-328`'s S1 record schema before proposing
+anything, specifically to confirm which corrector-*outcome* fields are
+already logged per invocation and therefore free to build a history
+feature on without new instrumentation: `corrector_break_step`, `hit_max`,
+`broke_at_step_1` (already used by #2), `active_mask_size`, and
+`n_active_positions_changed_by_corrector`. The last two are unused by any
+of the 21 prior ideas — #2 only reads the binary `broke_at_step_1` flag.
+That binary collapses two different situations to the same value whenever
+it's `False`: a corrector pass that flipped one token out of forty active
+positions, and one that flipped thirty-eight. Both count as "disagreed"
+for #2's agreement-rate; a magnitude-aware feature distinguishes them.
+
+### 22. Correction magnitude, sample-so-far (`correction_magnitude_mean_so_far`) — cheap, category: (2)
+
+`correction_magnitude_mean_so_far` = mean over this sample's *prior*
+corrector invocations (causal, `block_idx' < block_idx` order, same
+discipline as #2) of `n_active_positions_changed_by_corrector /
+active_mask_size` — the fraction of active positions the corrector
+actually touched, not just whether it touched any. Cold-start value (no
+prior invocations) = 0.0, matching `FixedPolicy`'s implicit assumption
+that there's no evidence of disagreement yet (mirrors #2's cold-start
+choice but on the opposite end: #2 defaults optimistic on *agreement*,
+this defaults to *no assumed magnitude*, since guessing a nonzero default
+here would bias early-block invocation decisions on no evidence).
+
+Motivation: complements #2 rather than duplicating it. Two samples with
+identical `agreement_rate_so_far` (say 0.5) can differ sharply in how much
+the corrector changes when it does disagree — one sample's disagreements
+are single-token nits, another's are broad rewrites of the active region.
+The former is weaker evidence that *this* block needs correction (the
+corrector's disagreements so far have been minor); the latter is stronger
+evidence (disagreements so far have been substantial). #2 cannot see this
+distinction because `broke_at_step_1` is boolean per invocation.
+
+Implementation note: same live-hook shape as #2 — `l1_policy.py`'s frozen
+5-feature inline hook doesn't carry cross-invocation state today, so this
+needs the same per-sample running-history threading through `generate.py`'s
+block loop that #2/#16/#17/#21 already require. In `l1_training.py` it's a
+cumulative-mean groupby, no new S1 collection — both `active_mask_size` and
+`n_active_positions_changed_by_corrector` are already columns in every v2+
+JSONL record.
+
+### 23. Correction effort, sample-so-far (`correction_effort_mean_so_far`, `hit_max_rate_so_far`) — cheap, category: (2)
+
+Same causal-history shape as #22, but built on `corrector_break_step`
+(iterations the fixed-point loop took to converge) and `hit_max` (whether
+it never converged within `max_corrector_steps_per_loop` and was cut off)
+instead of the changed-token count. Two features from the same pair of
+columns: `correction_effort_mean_so_far` = mean `corrector_break_step`
+over prior invocations, and `hit_max_rate_so_far` = fraction of prior
+invocations where `hit_max` was `True`. Cold-start: `1.0` for the effort
+mean (matches #2's optimistic-agreement default — one step is what
+`broke_at_step_1 == True` implies) and `0.0` for `hit_max_rate_so_far`.
+
+Motivation: distinct from both #2 and #22. #2 asks "did it agree
+immediately," #22 asks "how much did it change when it didn't," and this
+asks "how hard did the corrector have to work to reach a fixed point at
+all" — a sample where corrections regularly take 3-4 iterations (or
+regularly hit the cap) is one where the active region has been unstable
+under repeated correction, plausibly a different regime than a sample
+where every past correction converged in 1-2 steps but changed a lot of
+tokens (high #22, low #23 — a single confident large rewrite) versus one
+where it took many iterations to converge on a small change (low #22,
+high #23 — a genuinely contested handful of positions). The 2x2 spanned by
+#22 and #23 is not collapsible to either alone.
+
+Caveat: `hit_max_rate_so_far` inherits whatever bias `max_corrector_steps_per_loop`
+introduces — a low cap manufactures a high hit-max rate independent of the
+sample's real difficulty. Fine as a feature (the policy is trained under
+one fixed cap per Phase B run, so this is a consistent, not a confounded,
+signal within a run) but flag before comparing feature importances *across*
+Phase B runs that use different `max_corrector_steps_per_loop` values.
+
+### 24. Within-block repeat-invocation count (`corrector_invocations_this_block_so_far`) — cheapest of the three, category: new (within-block state, not cross-block or cross-sample)
+
+Distinct scope from #22/#23 (which fold in every prior block) and from
+#16/#17/#21 (which are about the *previous* block or *previous step's*
+confidence values): this counts how many times the corrector has *already*
+fired earlier in the *current* block, before this step's decision. The
+`while True` step loop at `generate.py:183` can invoke the corrector more
+than once per block (every `apply_corrector_every_n_steps`-th step, or per
+whatever the adaptive policy decides) before `block_idx` advances, so this
+is a real, currently-undifferentiated situation: two invocation
+opportunities with identical predictor-confidence features can be a
+block's first correction attempt or its fourth, and the frozen five-feature
+set treats them identically.
+
+Motivation: a block that has already been corrected twice this block and
+is still showing low-confidence active positions is a different situation
+from a block seeing its first invocation opportunity — plausibly evidence
+that this block is intrinsically harder (repeated correction not fully
+resolving it) or, conversely, that the marginal value of yet another
+corrector pass is dropping (diminishing returns already visible in this
+block's own trajectory). Cold-start / cheapest of the three to implement
+live: unlike #22/#23, this needs no historical outcome data at all, just a
+counter reset to `0` at the top of each `block_idx` iteration and
+incremented each time `invoke_corrector` is `True` — no `n_active_*` or
+`corrector_break_step` bookkeeping required, so it's implementable as a
+live-hook change independent of whether #22/#23 ever land.
+
+### Updated running priority (24 ideas total across eight passes)
+
+Trainable-today tier unchanged from pass 7 (all live-hook features, #22-#24
+included, sit in the new-instrumentation tier below since none are
+computable from the frozen inline hook without cross-invocation state):
+**#10 ≈ #15 ≈ #3 ≈ #8** → **#19 ≈ #20** → **#13** → **#11** → **#12** →
+**#14** → **#9** → **#2** → **#1**. New-instrumentation tier, #24 added at
+the cheap end (counter-only, no outcome bookkeeping) and #22/#23 added
+near #2 (same causal cumulative-mean shape, same live-hook cost):
+**#24** → **#16 ≈ #17** → **#2 ≈ #22 ≈ #23** (same implementation cost
+tier; priority among these three is a modeling question — which of
+agreement/magnitude/effort has the most signal — not an implementation
+one) → **#21** → **block-position variant** (still lowest, documented
+overfit history). **#18** still sits outside this ordering pending Lucas's
+fairness-question call from pass 6.
+
+**Next fire on Track C**, if routing lands here again: the corrector-side
+history category opened this pass (#22-#24) has three entries now: either
+go deeper there (e.g. a feature combining magnitude and effort, or a
+recency-weighted/exponential-decay variant of #2/#22/#23 instead of the
+flat historical mean all three currently use) or check whether any pass
+has considered features derived from the *predicted token identities*
+themselves (not just confidence/entropy over the distribution) — e.g.
+whether low-confidence active positions disproportionately fall on
+numeric/operator tokens in GSM8K vs. identifier/keyword tokens in
+HumanEval — which would need a tokenizer-decode step no current feature
+uses and is a genuinely different feasibility tier from everything listed
+so far.
