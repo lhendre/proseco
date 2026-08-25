@@ -1117,3 +1117,104 @@ proposals-only.
 `s1/runs/*.jsonl` logs a top-1 token id per position (settles #26's actual
 cost) before proposing further token-identity features; otherwise, #25's
 λ-sweep framing is the most actionable open item without new data.
+
+
+## 2026-08-25 — Track C, tenth pass: settling #26's cost, and one new rank-based feature
+
+### JSONL/token-id schema check (settles #26's open question from pass 9)
+
+Read `llada/generate.py`'s `s1_log` construction directly (the `rec` dict built
+at the corrector-invocation log site, plus the `s1_predictor_conf` dict merged
+into it). Confirmed: **no token ids are logged anywhere in S1's data path**.
+The fields written are `block_idx`, `step_in_block`, `corrector_break_step`,
+`hit_max`, `broke_at_step_1`, `active_mask_size`,
+`n_active_positions_changed_by_corrector`, plus the eight
+`predictor_conf_*`/`predictor_entropy_*` scalars — all derived from `pp`
+(the softmax) via `.max()`/`.std()`/`.mean()`/etc., never from
+`pp.argmax(dim=-1)` itself. `s1_pre_argmax` and the corrector's
+`corrected_tokens` tensor both hold real token ids in memory at generation
+time but neither is written to `rec`.
+
+This confirms pass 9's flag rather than resolving it favorably: **#26 is not
+free**. It needs a new S1 collection pass (add
+`pre_correction_argmax_tokens_on_active` — already named as a *docstring*
+promise in `generate()`'s S1 INSTRUMENTATION section but never actually
+written into `rec` in the current code, a second small gap worth noting to
+whoever owns Track B) before it can be explored offline at all, on top of the
+tokenizer-decode + taxonomy design cost pass 9 already flagged. Demoting #26
+to blocked-on-instrumentation rather than merely low-priority.
+
+### 27. Predictor confidence RANK within block (`predictor_conf_rank_mean_active`, `predictor_conf_rank_min_active`) — cheap, category (1), rank-based rather than magnitude-based
+
+Every one of #1-#26's confidence-shape statistics (#1's own mean/min/std,
+#10-#15, #19-#20) operates on the **raw magnitude** of `top1` — the actual
+softmax probability values. None of them are **rank-based**: where does each
+active position's confidence sit in the sorted order of confidences across
+the block, independent of the absolute scale?
+
+Concretely: `ranks = pp_top1_active.argsort().argsort() / (n_active - 1)`
+(percentile rank in `[0, 1]`, ties broken arbitrarily — cheap, one extra
+`argsort` over a vector already in hand as `t = top1[am]` in
+`features_from_predictor_logits`). Then aggregate the same way as the
+existing mean/min features: `predictor_conf_rank_mean_active` (how central is
+the average active position, rank-wise — near 0.5 means a block with no
+clear ordering, near 0 or 1 means most positions cluster at one end of their
+own block's distribution) and `predictor_conf_rank_min_active` (is the
+worst-confidence position an outlier within *this block* specifically, vs.
+`predictor_conf_min_active`, which says how low it is in absolute terms with
+no reference to the rest of the block).
+
+Motivation: `predictor_conf_mean_active` and `predictor_conf_std_active`
+already capture the block's confidence *distribution*, but a block-level
+mean/std pair is scale-dependent — two blocks with the same rank structure
+(one clear outlier low-confidence position among otherwise-uniform high
+confidence) can have very different `mean_active`/`std_active` values
+depending on the block's overall calibration level (which the corrector
+policy has no way to distinguish from those two scalars alone). A rank
+feature is invariant to that overall level and asks a different question:
+not "how confident is this block" but "how does this position's confidence
+compare to its own block's other active positions" — closer to the flip-rate
+framing in #16/#17 (relative to the block's own history) than to any of
+#1-#26's absolute-magnitude family. This was one of the explicit motivations
+in the routine's own candidate list ("predictor confidence RANK within
+block") and, on inspection, is not covered by anything logged so far.
+
+Cost: cheapest tier — reuses `t = top1[am]` already computed in
+`features_from_predictor_logits`, one extra `argsort` call, no new
+instrumentation, no tokenizer, no cross-invocation state. Same feasibility
+tier as #10/#15/#3/#8.
+
+Caveat carried over from #10-#15: another shape statistic added to an
+already-5-feature-frozen set risks the same small-N overfitting
+`PHASE_B_L1_DESIGN.md` flags for position features — this is a proposal for
+the *next* retraining round after Phase B lands real invocation counts, not
+a request to unfreeze `FEATURE_KEYS` now.
+
+### Updated running priority (27 ideas total across ten passes)
+
+#27 slots into the cheapest trainable-today tier alongside #10/#15/#3/#8 —
+same feasibility class, and the pass-9 note above means it should be
+evaluated together with that group rather than ahead of it, since none of
+that tier has been validated against Phase B data yet:
+**#10 ≈ #15 ≈ #3 ≈ #8 ≈ #27** → **#19 ≈ #20** → **#13** → **#11** → **#12** →
+**#14** → **#9** → **#2** → **#1**. New-instrumentation tier unchanged from
+pass 9: **#24** → **#16 ≈ #17** → **#2 ≈ #22 ≈ #23** → **#25 (only after
+#2/#22/#23 validated)** → **#21** → **block-position variant** (lowest,
+documented overfit history). **#26** moves from "unranked, cost unconfirmed"
+to **blocked on new S1 instrumentation** (confirmed this pass — see above)
+and stays out of the ranking until that lands. **#18** still sits outside
+this ordering pending Lucas's fairness-question call from pass 6.
+
+No implementation done here per the routine brief — this file stays
+proposals-only.
+
+**Next fire on Track C**, if routing lands here again: #25's λ-sweep framing
+(decay constant choices for the EWM variants of agreement rate / correction
+magnitude / effort) is the most actionable open item without new data or new
+code, now that #26 is confirmed blocked rather than merely deprioritized.
+Also worth a short note to whoever next touches `generate.py` (Track B, most
+likely): the docstring for `s1_log` already promises
+`pre_correction_argmax_tokens_on_active` / `post_correction_tokens_on_active`
+keys that pass 9 and this pass both found are not actually written into
+`rec` — either the docstring is stale or the write was dropped; worth
+confirming which before anyone builds #26 assuming the docstring is current.
