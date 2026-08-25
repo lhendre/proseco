@@ -101,6 +101,19 @@ reconciliation between `s1/analyze.py`'s per-block CV/spread "DIES on HumanEval"
 AUC-based Phase A rationale that put HumanEval in the Phase B pilot) rather than a bug touching any
 number this memo currently reports.
 
+Re-checked 2026-08-25 ~20:2x UTC (Track D pass 11, oldest-touched of B/C/D this fire — Track D last
+touched 14:27 UTC vs. Track B/A 16:26 and Track C 18:26): `v2.jsonl` still hasn't landed — `phase_b/`
+absent from the repo root, `origin/s1-instrumentation` fetched with no new commits beyond `4b5abe1`
+except fire N+10's re-verify (`f78959d`, no new finding — confirmed no finding #15 exists). Re-fetched
+`MEMO_L1_REV4.html` via the Artifact read path and diffed programmatically against the local copy —
+byte-identical apart from the same trailing-blank-line wrapper artifact as pass 10; still rev. 4, no
+Section 1/2 changes needed. Re-pulled `remasking_test:research-ideation/LANDSCAPE.md` with a fresh
+`git fetch` (the initial shallow clone under-reported HEAD as pass 9's `8a56216`; fetching found
+`2130ee5` — the same commit pass 10 already reviewed, one commit ahead of `8a56216`, "Mode F —
+fresh-paper sweep clean, corpus rotation remains exhausted, blocked-for-input," no corpus additions).
+No commits beyond `2130ee5` — Gate-8 cluster confirmed still the same 10 entries, related-work
+paragraph unchanged. No new audit finding to fold in; caveats list below is current through #14.
+
 **How to fill this in (<30 min):**
 1. `python phase_b_evaluate.py ~/proseco/phase_b/v2.jsonl` on the EC2 box (or wherever
    `v2.jsonl` lives once the run completes).
