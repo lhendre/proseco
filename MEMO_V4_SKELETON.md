@@ -65,6 +65,26 @@ caveats list below, placed at the bottom near #8 — like #8 it's currently a no
 formulas agree today, verified term-by-term by the audit pass) rather than a bug affecting any
 number in this memo, but worth carrying forward as a fragility note.
 
+Re-checked 2026-08-25 ~08:2x UTC (Track D pass 9, oldest-touched of B/C/D this fire — Track D last
+touched 02:26 vs. Track B 04:27 and Track A/C 06:32; Track A's 11th consecutive `EGRESS_BLOCKED`
+routed here, see `L1_LITERATURE.md`): `v2.jsonl` still hasn't landed — `phase_b/` absent from the
+repo root (only `phase_b_evaluate.py`/`phase_b_pilot.py`/`PHASE_B_L1_DESIGN.md`/
+`PHASE_B_PREREG_2026-08-22.md` are tracked there), `s1/runs/` unchanged (same 6 gsm8k + 6
+humaneval files + `s1_verdict.png` as every prior pass). Re-fetched `MEMO_L1_REV4.html` via the
+Artifact read path and diffed against the local copy — still byte-identical (rev. 4, dated
+2026-08-16, same pilot table, same provenance block referencing `phase_b/v2.jsonl` as "in flight");
+no Section 1/2 text changes needed. Re-cloned `remasking_test:research-ideation/LANDSCAPE.md` —
+HEAD is now `8a56216` (one new commit since pass 8, logging dLLM-Cache/DyLLM as a systems/caching
+background paper), grep-confirmed not part of L1's pre-commit-eligibility cluster (still
+CadLLM/AdaBlock-dLLM/DepCap/Dynamic-dLLM/Apple/KLASS/TraceLock/LESS/SWD/CORA-Diff, 10 entries) or
+the shape-vs-scalar precedent cluster — Gate-8 competitor count and the related-work paragraph
+below are unchanged again. Folded `L1_AUDIT_FINDINGS.md` finding #13 (logged fire N+8, commit
+`c65d8e1`) into the caveats list below, placed near #8/#12 — it's a crash-recovery/availability gap
+in `phase_b_pilot.py`'s resume path (unhandled `JSONDecodeError` on a truncated trailing line after
+a mid-write kill), not a silent-wrong-number bug, so it doesn't affect any number in this memo's
+tables unless the EC2 run has actually been interrupted mid-write (unknown from here — Lucas drives
+that side directly).
+
 **How to fill this in (<30 min):**
 1. `python phase_b_evaluate.py ~/proseco/phase_b/v2.jsonl` on the EC2 box (or wherever
    `v2.jsonl` lives once the run completes).
@@ -230,6 +250,14 @@ and matter more than the original #2/#3):
   from the other with no error, corrupting the meaning of a future retrain's AUC without touching
   today's `l1_mlp:0.40` weights. No action needed for this memo; worth a one-line footnote only if
   `l1_weights.json` is ever retrained between now and publication.
+- Finding #13 (MEDIUM, new 2026-08-25): `phase_b_pilot.py`'s resume path
+  (`json.loads` per line against the existing `--out` file) has no `try/except` around a
+  truncated trailing line, so a mid-write kill (spot-instance reclaim, OOM, `Ctrl-C`, CUDA driver
+  reset) on the long-running T4 pilot turns a resumable run into one that crashes on every
+  relaunch until the last line is hand-truncated. Crash-recovery/availability issue, not a
+  wrong-number bug — doesn't affect any table in this memo unless the EC2 run has actually been
+  interrupted mid-write (not knowable from this repo checkout; ask Lucas if `v2.jsonl` takes
+  unusually long to land).
 
 ## Section 4 — The decisive experiment / A100 ask
 
