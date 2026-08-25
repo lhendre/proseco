@@ -1151,3 +1151,44 @@ No new finding this pass. 9 fires deep into a 14-finding list on
 unchanged code — diminishing returns are expected; flagging explicitly
 that this was a genuine fresh read of previously-under-covered code
 paths, not a rubber-stamp re-verify.
+
+---
+
+## 2026-08-25 — Track B audit (fire N+11, commit cf9838a reviewed)
+
+No code changed since fire N+10 (`git diff f78959d..HEAD -- l1_policy.py
+l1_training.py phase_b_pilot.py phase_b_evaluate.py llada/generate.py
+PHASE_B_PREREG_2026-08-22.md` is empty — only `L1_FEATURE_IDEAS.md` and
+`MEMO_V4_SKELETON.md` changed in between, from Track C/D fires).
+Findings #1-#2 fixed, #3-#14 still open and unchanged, re-confirmed by
+re-reading current file contents.
+
+This pass targeted state drift rather than new code paths — checked
+whether anything the audit depends on had silently changed underneath
+it, since 10 straight fires of re-reading unchanged source is unlikely
+to find new logic bugs:
+
+- `l1_weights.json` last touched at commit `185e2ca` (2026-08-19,
+  original Phase B push) — unchanged since. Still the exact weights
+  finding #6's overweighted-duplicate training data produced; still the
+  weights the live EC2 pilot's `l1_mlp:0.40` arm loads.
+- No `phase_b/pilot.jsonl`, `v2.jsonl`, or any `*pilot*.jsonl`/`*v2*.jsonl`
+  anywhere in this checkout — repo-side confirmation Phase B output
+  still hasn't landed (Lucas runs EC2 directly, no visibility here).
+- `s1/runs/` — recount came up 16 vs. fire N+9's "15 files" note; not
+  drift, just an inconsistent prior count (14 dated `.jsonl` run files +
+  `s1_verdict.png`, and this pass additionally counted the empty
+  `.gitkeep` = 16; fire N+9 apparently didn't count one of
+  `.gitkeep`/`s1_verdict.png`). `git log -- s1/runs/` confirms the
+  directory's last real commit is still `aa12bdb` (the S1 verdict run) —
+  no new files, just a counting inconsistency between fires. Noting so a
+  future fire doesn't chase this as a phantom new-file finding.
+
+No new finding this pass. Also cross-checked `PHASE_B_PREREG_2026-08-22.md`
+against `phase_b_pilot.py`'s current `BENCH_CFG`/CLI defaults line by line
+(sample sizes, policy list + thresholds, steps/gen_length/block_length,
+per-benchmark `max_corrector_steps_per_loop`) — all match the locked
+prereg exactly. `apply_corrector_every_n_steps=2` (not mentioned in the
+prereg) only gates the `fixed` arm's cadence per finding #8; already
+covered there as a wall-clock-only, non-NFE fairness note, not a prereg
+violation.

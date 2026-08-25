@@ -319,3 +319,23 @@ pass).
 **Next fire on Track A:** same as always — single probe, log briefly here,
 fall through to whichever of B/C/D is then oldest-touched (after this
 fire, that is Track C at 12:29 UTC, unless B or D get touched again first).
+
+## 2026-08-25 22:2x UTC — Track A 14th re-check, still blocked (no re-notify)
+
+Single fresh probe: `arxiv.org/list/cs.LG/recent` — `EGRESS_BLOCKED`,
+identical error shape to all thirteen prior fires. 14/14 consecutive,
+~40h since the last full sweep. No re-notify (same standing fact as
+every prior re-check entry).
+
+Routing: `L1_LITERATURE.md`/`L1_AUDIT_FINDINGS.md` both touched last at
+16:26:59 UTC (Track A+B combined, fire N+10), `L1_FEATURE_IDEAS.md` at
+18:26:58 UTC (Track C pass 11), `MEMO_V4_SKELETON.md` at 20:26:23 UTC
+(Track D pass 11) — Track B was oldest-touched of B/C/D (tied with this
+file, but B is the higher-priority tiebreak per the routine's own
+instructions), so this fire routes to Track B. See that file's fire
+N+11 entry.
+
+**Next fire on Track A:** same as always — single probe, log briefly here,
+fall through to whichever of B/C/D is then oldest-touched (after this
+fire, that is Track C at 18:26:58 UTC, unless B or D get touched again
+first).
