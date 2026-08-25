@@ -992,3 +992,128 @@ numeric/operator tokens in GSM8K vs. identifier/keyword tokens in
 HumanEval — which would need a tokenizer-decode step no current feature
 uses and is a genuinely different feasibility tier from everything listed
 so far.
+
+
+## 2026-08-25 — Track C, ninth pass: recency-weighted corrector history, and predicted-token lexical category
+
+Track A stayed `EGRESS_BLOCKED` this fire (11/11 consecutive fresh probes,
+`arxiv.org/list/cs.LG/recent`, identical error shape — see
+`L1_LITERATURE.md`'s matching entry, no re-notify per standing guidance;
+Lucas was already told once at the 3/3 mark). Routing: among the four
+track files, `L1_FEATURE_IDEAS.md` was the oldest genuinely-touched of
+B/C/D (00:26 UTC 08-25, vs. `MEMO_V4_SKELETON.md`'s 02:26 and
+`L1_AUDIT_FINDINGS.md`'s 04:27), so Track C routes per the established
+fallback rule.
+
+Picking up the two open threads pass 8 flagged rather than re-deriving a
+ninth moment/shape statistic of `t` or `e`: (a) a recency-weighted variant
+of the flat-historical-mean features (#2, #22, #23), and (b) whether the
+*identity* of predicted tokens — not just confidence/entropy over the
+distribution — carries signal, which no prior pass has touched since it
+needs a tokenizer-decode step none of #1-#24 require.
+
+### 25. Exponential-decay-weighted variant of agreement/magnitude/effort history (`agreement_rate_ewm`, `correction_magnitude_ewm`) — cheap extension of #2/#22, category: (2)
+
+#2, #22, and #23 all fold a sample's prior corrector invocations into a
+**flat** mean — block 1 and block 19 (for a sample currently on block 20)
+count equally. That's a real modeling choice, not a neutral default: if a
+sample's corrector behavior drifts over the generation (e.g. gets easier
+as more context accumulates, or harder as compounding errors build up),
+a flat mean lags behind the sample's *current* regime by construction,
+weighted down by however many early blocks happened to look like.
+
+Proposed: replace (or add alongside, for an ablation) `agreement_rate_so_far`
+and `correction_magnitude_mean_so_far` with exponentially-weighted versions
+— `agreement_rate_ewm = Σ λ^(k-1) · broke_at_step_1_k` over prior
+invocations k=1..n (most recent invocation weighted highest), normalized by
+`Σ λ^(k-1)`, same cold-start convention as #2 (1.0) when n=0. Identical
+causal-ordering discipline as #2/#22/#23 (`block_idx' < block_idx` only —
+same leakage guard already fixed once in `a796b4f`/`phase_b_pilot.py`).
+
+**This is not free of new researcher degrees of freedom, unlike most of
+passes 3-5's ideas:** λ (the decay rate) is an open hyperparameter, same
+class of concern as #9's τ and #13's k — worth sweeping a small grid
+(e.g. λ ∈ {0.5, 0.7, 0.9}, flat-mean as the λ→1 limit) rather than picking
+one value and reporting only that AUC. Recommend evaluating this **only
+after** #2/#22/#23 themselves have been tried and shown some signal in
+their flat form — if the flat versions add nothing, a recency-weighted
+version of a signal that isn't there is unlikely to help and isn't worth
+the extra hyperparameter surface. Flagging this ordering explicitly since
+it's a refinement of unvalidated ideas, not a validated one.
+
+### 26. Lexical/syntactic category of low-confidence active positions' predicted tokens (`low_conf_numeric_frac_active`, benchmark-conditional) — new feasibility tier, needs tokenizer decode
+
+Every one of #1-#25 is a function of the predictor's **probability
+distribution** at each active position — none look at **which token** the
+distribution's mass actually sits on. `l1_policy.py`'s
+`features_from_predictor_logits` has `top1` (a probability) but discards
+the corresponding token ids after computing it; recovering "what token is
+this" needs `pp.argmax(dim=-1)` (already implicitly computed to get
+`top1`, just not retained) decoded through the tokenizer already loaded
+elsewhere in `generate.py`.
+
+Motivation, grounded in the benchmark split already central to Phase A's
+own headline result (dAUC +0.019 GSM8K / +0.033 HumanEval / +0.027
+combined — the two benchmarks already behave differently enough to report
+separately): GSM8K's hard positions are plausibly concentrated on numeric
+tokens (a wrong digit or operator changes the answer) while HumanEval's
+are plausibly concentrated on identifier/keyword/punctuation tokens (a
+wrong variable name or bracket breaks the program differently than a wrong
+digit changes an equation). A feature like
+`low_conf_numeric_frac_active` (fraction of below-median-confidence active
+positions whose top-1 token decodes to a numeric-looking string) could let
+one MLP implicitly specialize its correction-worthiness read by *what kind*
+of token is uncertain, rather than only *how* uncertain — something no
+confidence/entropy/margin/moment statistic in #1-#25 can express, since
+all of them are computed purely from `pp`'s shape and are blind to which
+vocabulary entries the mass sits on.
+
+**Why this is a different feasibility tier than everything else in this
+file, including the new-instrumentation ideas (#1, #16/#17, #21-#24):**
+those all need new *state* (cross-invocation counters, prior-step tensors)
+but reuse data already flowing through the existing pipeline. This needs a
+**tokenizer-decode step in the hot path** (or at training time over logged
+token ids, if `s1/runs/*.jsonl` records the top-1 token id per position —
+not confirmed this pass, flagged for whoever picks this up to check
+against the actual JSONL schema before assuming it's free) plus a
+category taxonomy (numeric / identifier / keyword / punctuation / other)
+that itself needs deciding and is benchmark-specific by construction —
+GSM8K and HumanEval don't share a natural token-category distribution, so
+this feature's usefulness (if any) is likely to look different by
+benchmark in exactly the way the frozen five features currently don't
+attempt to be, which cuts both ways: possibly higher marginal AUC on the
+per-benchmark breakdown Phase A already reports, but also a new axis
+(category taxonomy choice) for the small-N overfitting risk
+`PHASE_B_L1_DESIGN.md` already flags for position-based features (see
+pass 2's block-position entry) to attach to.
+
+**Recommendation:** lowest priority to actually build of anything in this
+file — highest implementation cost (tokenizer wiring + taxonomy design),
+least certain payoff, and the one idea here that could plausibly need a
+*new* S1 collection pass even to explore offline if token ids aren't
+already logged. Worth a five-minute check of the JSONL schema before the
+next pass proposes anything token-identity-adjacent, rather than a full
+design — flagging the direction, not committing to it.
+
+### Updated running priority (26 ideas total across nine passes)
+
+No change to the trainable-today or new-instrumentation tiers from pass 8;
+#25 slots in as a refinement *gated on* #2/#22/#23 showing signal first
+(not before them), and #26 opens a new, currently-unranked tier below
+everything else (tokenizer-decode + taxonomy cost, payoff unconfirmed):
+**#10 ≈ #15 ≈ #3 ≈ #8** → **#19 ≈ #20** → **#13** → **#11** → **#12** →
+**#14** → **#9** → **#2** → **#1**. New-instrumentation tier: **#24** →
+**#16 ≈ #17** → **#2 ≈ #22 ≈ #23** → **#25 (only after #2/#22/#23
+validated)** → **#21** → **block-position variant** (still lowest among
+the ranked tiers, documented overfit history). **#26** sits in its own
+unranked tier pending a JSONL-schema check for token-id availability.
+**#18** still sits outside this ordering pending Lucas's fairness-question
+call from pass 6.
+
+No implementation done here per the routine brief — this file stays
+proposals-only.
+
+**Next fire on Track C**, if routing lands here again: check whether
+`s1/runs/*.jsonl` logs a top-1 token id per position (settles #26's actual
+cost) before proposing further token-identity features; otherwise, #25's
+λ-sweep framing is the most actionable open item without new data.
