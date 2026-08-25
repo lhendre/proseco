@@ -85,6 +85,22 @@ a mid-write kill), not a silent-wrong-number bug, so it doesn't affect any numbe
 tables unless the EC2 run has actually been interrupted mid-write (unknown from here — Lucas drives
 that side directly).
 
+Re-checked 2026-08-25 ~14:2x UTC (Track D pass 10, oldest-touched of B/C/D this fire — Track D last
+touched 08:25 UTC vs. Track B 10:26 and Track C 12:29; Track A's 12th consecutive `EGRESS_BLOCKED`
+routed here, see `L1_LITERATURE.md`): `v2.jsonl` still hasn't landed — `phase_b/` absent from the
+repo root, `s1/runs/` unchanged (same 16 files as every prior pass). Re-fetched `MEMO_L1_REV4.html`
+via the Artifact read path and diffed the extracted body against the local copy programmatically
+(not eyeballed) — byte-identical apart from one trailing blank line introduced by the frame
+wrapper; still rev. 4, dated 2026-08-16, same pilot table, no Section 1/2 changes needed.
+Re-pulled `remasking_test:research-ideation/LANDSCAPE.md` — HEAD advanced to `2130ee5` (one new
+commit since pass 9's `8a56216`, a clean Mode F fresh-paper sweep with no corpus additions) —
+grep-confirmed the Gate-8 cluster is still the same 10 entries, related-work paragraph unchanged.
+Folded `L1_AUDIT_FINDINGS.md` finding #14 (logged fire N+9, commit `a823da2`) into the caveats list
+below, placed at the bottom near #12/#13 — like those, it's a documentation/rigor gap (undocumented
+reconciliation between `s1/analyze.py`'s per-block CV/spread "DIES on HumanEval" verdict and the
+AUC-based Phase A rationale that put HumanEval in the Phase B pilot) rather than a bug touching any
+number this memo currently reports.
+
 **How to fill this in (<30 min):**
 1. `python phase_b_evaluate.py ~/proseco/phase_b/v2.jsonl` on the EC2 box (or wherever
    `v2.jsonl` lives once the run completes).
@@ -258,6 +274,16 @@ and matter more than the original #2/#3):
   wrong-number bug — doesn't affect any table in this memo unless the EC2 run has actually been
   interrupted mid-write (not knowable from this repo checkout; ask Lucas if `v2.jsonl` takes
   unusually long to land).
+- Finding #14 (MEDIUM, new 2026-08-25): `s1/analyze.py`'s go/no-go verdict script (the one that
+  produced the "DIES on HumanEval" result cited as prior context for L1) rests on unweighted,
+  CI-free hard thresholds and misses its 0.70 `frac_noop` cutoff by 0.008 on HumanEval's largest
+  (most-informative) block — a documentation/rigor gap, not a bug in any number this memo reports.
+  Nothing in this file, `PHASE_B_L1_DESIGN.md`, or `PHASE_B_PREREG_2026-08-22.md` explains why that
+  script's per-block spread verdict disagrees with the AUC-based Phase A rationale (ΔAUC +0.033 on
+  HumanEval, the larger of the two benchmark deltas) that motivated running Phase B on HumanEval at
+  all. If Yair or Cornell asks "why both benchmarks," the answer isn't currently written down
+  anywhere reviewer-facing — worth one clarifying sentence in Section 2 or 5 before this memo goes
+  out, independent of the v2 verdict.
 
 ## Section 4 — The decisive experiment / A100 ask
 
