@@ -231,3 +231,37 @@ pass, three new proposals (#19-#21).
 four-source sweep only on unblock. By the routing rule the next fire
 should land on Track D (`MEMO_V4_SKELETON.md`, 14:26 UTC) unless Track A
 unblocks first, since this fire touched C.
+
+---
+
+## 2026-08-25 02:2x UTC — Track A 8th–10th re-checks, still blocked (no re-notify) — backfill note
+
+The 22:26 (08-24) and 00:26 (08-25) fires each did a single-probe Track A
+re-check as their routing landed elsewhere (Track B fire N+7, Track C pass
+8 respectively) — both logged "still blocked" in their commit messages
+(`c271205`, `5fc6b3d`) but neither wrote a dated entry to this file, so
+this entry backfills that gap. This fire's own fresh probe:
+
+- `arxiv.org/list/cs.LG/recent` — `EGRESS_BLOCKED`, identical error shape
+  to all nine prior fires (02:27, 08:24, 16:25 on 08-23; 00:25, 06:28,
+  08:28*, 18:26 on 08-24; plus the two backfilled 22:26/00:26 checks).
+
+10/10 consecutive now, spanning ~24h since the last full sweep. No
+re-notify — Lucas was already told once at the 3/3 mark (16:25 UTC
+08-23) and nothing has changed since (same error shape, same domain-level
+block). This has now been the *routing-selected* track ten fires running
+without ever completing its actual job; the fallback-to-B/C/D pattern is
+working as designed but is worth flagging in plain terms: **Track A has
+produced zero literature-scan output since this routine started** and
+will keep producing zero until the egress allowlist adds arxiv.org /
+semanticscholar.org. That's a standing fact, not new information, so
+still no PushNotification — but noting it here explicitly in case a
+future fire's "worth re-notifying" judgment call benefits from seeing the
+duration spelled out rather than inferring it from a re-check counter.
+
+Per routing rule, falling through to whichever of B/C/D is oldest-touched:
+D (`MEMO_V4_SKELETON.md`, last real content 20:25 UTC 08-24) is oldest,
+ahead of B (22:26) and C (00:26) — routing this fire to Track D.
+
+**Next fire on Track A:** same as always — single probe, log briefly here
+(actually write the entry this time), fall through if still blocked.

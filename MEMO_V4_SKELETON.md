@@ -52,6 +52,19 @@ is still commit `8a56216` (same as pass 6, no new commits since), so the Gate-8 
 methodology gap in the *training-time* AUC number itself (same class as #4, both undermine trust
 in "0.9589 matches Phase A ceiling") rather than a Phase B pilot/eval bug.
 
+Re-checked 2026-08-25 ~02:2x UTC (Track D pass 8, oldest-touched of B/C/D this fire — Track A
+routed here again per its own 10th consecutive `EGRESS_BLOCKED`, see `L1_LITERATURE.md`):
+`v2.jsonl` still hasn't landed — `phase_b/` absent, `s1/runs/` byte-count and filenames unchanged
+from every prior pass. Re-fetched `MEMO_L1_REV4.html` via the Artifact read path (not WebFetch —
+confirmed byte-identical modulo the frame-wrapper's trailing `</body></html>`, diffed the two
+files directly rather than eyeballing) — still no Section 1/2 changes needed. Re-pulled
+`remasking_test:research-ideation/LANDSCAPE.md` — HEAD still `8a56216` (unchanged since pass 6),
+`grep -c` on the literal Gate-8 cluster string still returns 10 — related-work paragraph unchanged
+again. Folded `L1_AUDIT_FINDINGS.md` finding #12 (logged fire N+7, commit `c271205`) into the
+caveats list below, placed at the bottom near #8 — like #8 it's currently a no-op (the two feature
+formulas agree today, verified term-by-term by the audit pass) rather than a bug affecting any
+number in this memo, but worth carrying forward as a fragility note.
+
 **How to fill this in (<30 min):**
 1. `python phase_b_evaluate.py ~/proseco/phase_b/v2.jsonl` on the EC2 box (or wherever
    `v2.jsonl` lives once the run completes).
@@ -209,6 +222,14 @@ and matter more than the original #2/#3):
   `features_from_predictor_logits` call that `cadllm_linear`/`l1_mlp` both pay for every predictor
   step — a small constant-per-step compute asymmetry, not a `total_nfe` difference. Only relevant
   if this memo ever reports wall-clock/throughput per policy; irrelevant to the accuracy tables.
+- Finding #12 (LOW, new 2026-08-24): `generate.py`'s inline S1 instrumentation block and
+  `l1_policy.py`'s `features_from_predictor_logits` are two independent hand-copies of the same
+  five-feature formula (no shared call, no equivalence test) — verified term-by-term to currently
+  agree, so this does not affect any number in this memo. Flagged as a train/inference-skew risk
+  for future edits: a change to one copy (e.g. a numerical-stability fix) would silently desync
+  from the other with no error, corrupting the meaning of a future retrain's AUC without touching
+  today's `l1_mlp:0.40` weights. No action needed for this memo; worth a one-line footnote only if
+  `l1_weights.json` is ever retrained between now and publication.
 
 ## Section 4 — The decisive experiment / A100 ask
 
