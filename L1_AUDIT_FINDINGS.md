@@ -1007,3 +1007,103 @@ read; any decode error on a non-last line is a different, worse problem
 skipping.
 
 ---
+
+## 2026-08-25 — Track B audit (fire N+9, commit 3a01a56 reviewed)
+
+Re-verify: no code diff in `l1_policy.py`, `l1_training.py`, `phase_b_pilot.py`,
+`llada/generate.py`, `phase_b_evaluate.py`, `s1/run_s1.py`, `classifier.py`, or
+`l1_weights.json` since fire N+8 (`git diff --stat c65d8e1..HEAD` on those
+paths is empty) — intervening commits are Track A/C/D file-only changes.
+Findings #1–#13 unchanged. `s1/runs/` still holds the same 15 pre-Phase-B
+files; still no `phase_b/pilot.jsonl` or `v2.jsonl` in this checkout.
+
+This fire read `s1/analyze.py` in full for the first time (no prior Track B
+fire mentions it — confirmed via `grep -n "analyze.py" L1_AUDIT_FINDINGS.md`
+returning nothing before this entry). One new finding.
+
+### 14. MEDIUM — `s1/analyze.py`'s go/no-go verdict (the check that produced
+the committed "DIES on HumanEval" result the project appears to have
+overridden without a documented rationale) uses unweighted, CI-free, hard
+thresholds on top of wildly uneven per-block sample sizes
+
+`s1/analyze.py` is the script whose docstring frames it as *the* Phase A
+wedge test: "L1 LIVES if coefficient of variation (std/mean) across block
+positions exceeds 0.30 for `frac_noop` OR `frac_active_changed`, AND at
+least one block has frac_noop > 0.70 while another has < 0.30." `verdict()`
+(lines 105–169) implements exactly that — `cv_ok` is an OR over two CVs,
+`spread_condition` is `max(frac_noop) > 0.70 and min(frac_noop) < 0.30`,
+and `lives = cv_ok and spread_condition`, computed per-benchmark by
+grouping `s1/runs/*.jsonl` records by `(benchmark, block_idx)` with no
+weighting for how many invocations back each block.
+
+Running it against the actual committed data (`python3 s1/analyze.py
+s1/runs/`) reproduces exactly what commit `aa12bdb`'s message says
+("S1 full int8 verdict: L1 LIVES on GSM8K, DIES on HumanEval per strict
+spec"):
+
+```
+[gsm8k]     CV(frac_noop)=0.397  CV(frac_active_chg)=0.739  spread=True   -> LIVES
+[humaneval] CV(frac_noop)=0.784  CV(frac_active_chg)=0.493  spread=False  -> DIES
+OVERALL: L1 LIVES on ['gsm8k'], DIES on ['humaneval'].
+```
+
+Two problems, both in the script itself, not just in how its output was
+used downstream:
+
+**(a) The HumanEval "DIES" turns on a threshold miss of 0.008.** HumanEval's
+`max(frac_noop)` is 0.692 (block 1) against the hardcoded cutoff of 0.70 —
+a difference of a little over 1%, with no CI, no permutation test, and no
+sensitivity check on the 0.70/0.30/0.30 constants anywhere in the script or
+in `PHASE_B_L1_DESIGN.md`. `cv_ok` is actually satisfied comfortably on
+HumanEval either way (`CV(frac_noop)=0.784`, well past 0.30). The overall
+verdict here is decided entirely by whether one block's `frac_noop` lands
+on one side of an un-uncertainty-quantified line.
+
+**(b) Blocks are weighted equally regardless of `n_invocations`, which
+spans two orders of magnitude.** Printed per-block counts for HumanEval run
+from `n_inv=1792` (block 0) down to `n_inv=32` (blocks 12–26, i.e. 15 of
+the 27 blocks the CV/spread computation treats as equally informative).
+`frac_noop=0.000` at n=32 (blocks 14/15/17/18/19) is a much noisier
+estimate than `frac_noop=0.494` at n=1792 (block 0), but `cv()` and
+`spread_condition` fold them into the same unweighted list. Whether the
+"DIES" verdict would survive a per-block-count-weighted or n-thresholded
+(e.g., blocks with `n_invocations < 100` excluded) re-analysis is untested
+— this finding does not claim the verdict would flip, only that the script
+as committed cannot currently tell you.
+
+**Why this matters beyond a stale script:** `PHASE_B_L1_DESIGN.md`'s cited
+Phase A rationale for running Phase B on *both* benchmarks is a different,
+later analysis — pooled v2+v3 logistic-regression/MLP AUC, ΔAUC=+0.033 on
+HumanEval, actually the larger of the two benchmark deltas (vs. +0.019
+GSM8K) — which is consistent with "L1 has signal on HumanEval," the
+opposite emphasis from `analyze.py`'s per-block spread verdict. Nothing in
+`PHASE_B_L1_DESIGN.md`, `PHASE_B_PREREG_2026-08-22.md`, `MEMO_V4_SKELETON.md`,
+or this findings file documents that the AUC-based analysis supersedes the
+`analyze.py` CV/spread check, or explains why a script committed with a
+"DIES on HumanEval" verdict message didn't stop HumanEval from being one of
+the two benchmarks the live Phase B pilot (currently running on EC2, per
+the design doc's Day 3-7 timeline) is spending T4-hours evaluating. Both
+things can be true — the AUC analysis may be the more rigorous, superseding
+check — but that reconciliation isn't written down anywhere a reviewer
+(Yair, or Cornell) would find it, and finding #4 already flags that the
+`final_test_auc` number itself has an unresolved question about its
+computation. This is a documentation/rigor gap, not (currently) evidence
+that Phase B's measured accuracy numbers themselves are wrong.
+
+**Recommend:** either (1) add one paragraph to `PHASE_B_L1_DESIGN.md` or
+the memo's related-work/methodology section explicitly stating that the
+`analyze.py` per-block spread check was an earlier/coarser heuristic
+superseded by the AUC-based analysis, with a one-line reason why the two
+disagree on HumanEval, or (2) if that reconciliation was never actually
+made, treat this as open: re-run `analyze.py` with per-block sample-size
+weighting (e.g. inverse-variance or a minimum-n cutoff per block) and a
+bootstrap CI on the spread/CV statistics before citing its "LIVES/DIES"
+determination in anything reviewer-facing.
+
+Not paired with a PushNotification: this is a gap in documented rationale
+for a decision already made and already in motion (Phase B is mid-pilot on
+both benchmarks), not a bug that changes any number the pilot is currently
+computing. Flagging here so it's in the trail if Yair or Cornell asks "why
+both benchmarks" and the answer isn't otherwise written down.
+
+---
