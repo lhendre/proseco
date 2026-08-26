@@ -1192,3 +1192,41 @@ prereg exactly. `apply_corrector_every_n_steps=2` (not mentioned in the
 prereg) only gates the `fixed` arm's cadence per finding #8; already
 covered there as a wall-clock-only, non-NFE fairness note, not a prereg
 violation.
+
+---
+
+## 2026-08-26 — Track B: independent cross-repo corroboration of finding #14, new downstream fact (pitch draft flagged stale)
+
+Routine routing pointed at Track C (oldest-touched of A/B/C/D) this fire,
+but a fresh check of the sibling routine's repo (`lhendre/remasking_test`,
+`research-ideation` branch) turned up state worth folding back here instead
+— HEAD had advanced to `4c64fa4` (2026-08-26 13:48 UTC) via `IDEAS.md`/
+`IDEATION_LOG.md` changes that don't touch `LANDSCAPE.md`, which is why at
+least three prior fires (14:26/16:27/18:24 UTC) missed it: their staleness
+check only compared `LANDSCAPE.md`'s own last-commit timestamp, not full
+sibling-repo HEAD.
+
+That commit is the sibling routine's own Mode B pass independently
+re-deriving finding #14's core contradiction (pooled AUC ΔAUC=+0.033 on
+HumanEval vs. `analyze.py`'s per-block "DIES on HumanEval" verdict) after
+reading this file — not new information about the codebase itself, so this
+is corroboration, not a new bug. What *is* new: that fire explicitly flags
+`pitches/PITCH_L1_2026-08-22.md` (a drafted-but-apparently-unsent update to
+Yair Schiff) as **stale and should not be sent as currently worded**,
+because its central framing — "HumanEval: same audit came back flat, no
+meaningful per-block variance" — states the `analyze.py` verdict as settled
+fact with no mention of the contradicting AUC analysis. Checked the pitch
+file directly: confirmed, lines 9-13 commit to the flat-HumanEval framing
+without caveat. It also folds in this file's finding #4 (checkpoint-
+selection bias on `AUC=0.9589`) as a second caveat the pitch is missing.
+
+Same disposition as finding #14 itself: **not paired with a
+PushNotification.** Nothing here changes a number the live EC2 pilot is
+computing, the pitch is (per its own text) already gated on Lucas's
+sign-off before sending, and this is the same unreconciled-methodology gap
+already on file, now with one concrete downstream consequence (don't send
+that draft yet) rather than a new defect. Recording it here so the next
+Track D pass folds "pitch draft stale, needs the HumanEval-contradiction +
+finding #4 caveats before it goes to Yair" into `MEMO_V4_SKELETON.md`'s
+caveat list, since the memo is the more likely actual deliverable and
+should not inherit the same unreconciled framing.
