@@ -114,6 +114,19 @@ fresh-paper sweep clean, corpus rotation remains exhausted, blocked-for-input," 
 No commits beyond `2130ee5` — Gate-8 cluster confirmed still the same 10 entries, related-work
 paragraph unchanged. No new audit finding to fold in; caveats list below is current through #14.
 
+Re-checked 2026-08-26 ~22:2x UTC (Track D pass 12, oldest-touched of A/B/C/D this fire per
+per-file timestamps — `L1_FEATURE_IDEAS.md` 18:26 UTC 08-25 vs. this file 20:26 UTC 08-25 — but
+Track C's own pass 11 explicitly blocks on pilot data landing, which fire N+11's audit log flagged
+as still true, so this fire did the concrete unblocked action item fire N+11 left open instead:
+folding its finding-#14 addendum into this memo's caveats list, done above). `v2.jsonl` still
+hasn't landed — `phase_b/` absent from repo root, `s1/runs/` unchanged (same 16 files). Code
+unchanged: `l1_policy.py`/`l1_training.py`/`l1_weights.json`/`llada/generate.py`/
+`PHASE_B_L1_DESIGN.md` still `185e2ca`, `phase_b_pilot.py`/`phase_b_evaluate.py` still `b0b1b8d`.
+Did not re-fetch `MEMO_L1_REV4.html` or `LANDSCAPE.md` this pass (no reason to expect either moved
+since pass 11 six hours ago and this fire's budget went to the caveat fold instead) — next pass
+should re-check both. `arxiv.org`/`semanticscholar.org` still `EGRESS_BLOCKED` (Track A, no
+re-notify — already reported).
+
 **How to fill this in (<30 min):**
 1. `python phase_b_evaluate.py ~/proseco/phase_b/v2.jsonl` on the EC2 box (or wherever
    `v2.jsonl` lives once the run completes).
@@ -297,6 +310,15 @@ and matter more than the original #2/#3):
   all. If Yair or Cornell asks "why both benchmarks," the answer isn't currently written down
   anywhere reviewer-facing — worth one clarifying sentence in Section 2 or 5 before this memo goes
   out, independent of the v2 verdict.
+- Finding #14 addendum (2026-08-26, cross-repo corroboration): `remasking_test:research-ideation`
+  independently re-derived the same AUC-vs-`analyze.py` contradiction and flagged
+  `pitches/PITCH_L1_2026-08-22.md` (a drafted, apparently-unsent update to Yair) as stale — its
+  "HumanEval: same audit came back flat" framing states the `analyze.py` verdict as settled with no
+  mention of the contradicting AUC result, and is also missing the finding #4 (checkpoint-selection
+  bias on AUC=0.9589) caveat. Not this memo's own bug (this skeleton already carries both caveats
+  above and at line ~207), but a reminder not to let this memo's Section 2/5 clarifying sentence
+  (previous bullet) regress to that framing, and worth a heads-up to Lucas before that pitch draft
+  is sent as currently worded.
 
 ## Section 4 — The decisive experiment / A100 ask
 
