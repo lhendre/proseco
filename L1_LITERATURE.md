@@ -1,9 +1,3 @@
-# L1 Literature Scan
-
-Track A (literature scan) log. Append-only, dated entries.
-
----
-
 ## 2026-08-23 02:2x UTC — Track A attempted, blocked by egress policy
 
 This fire's routing (git log recency across `L1_LITERATURE.md`,
@@ -339,3 +333,56 @@ N+11 entry.
 fall through to whichever of B/C/D is then oldest-touched (after this
 fire, that is Track C at 18:26:58 UTC, unless B or D get touched again
 first).
+
+## 2026-09-02 14:2x UTC — DiFFPO (2510.02212) folded in — first new competitor since the 08-29 escalation
+
+Own live probe first: `arxiv.org/list/cs.LG/recent` — `EGRESS_BLOCKED`,
+same error shape as every prior fire since 08-23. Track A's own arxiv/
+semanticscholar sweep remains structurally dead; this is not new
+information (see the 2026-08-25 02:2x entry and every quiet-fire log
+entry since the 2026-08-29 02:2x escalation) and does not by itself
+warrant a re-notify.
+
+However, this fire is not a no-op quiet fire: `remasking_test:research-
+ideation` HEAD advanced to `76c79485` (2026-09-02 13:48 UTC, Mode F) since
+the last check, and unlike the last several fires' "clean scan, nothing
+new" results, this one found a genuine new-to-corpus paper and wrote it
+up in full in `LANDSCAPE.md` — readable locally via git, no arxiv access
+needed to fold it in here.
+
+**DiFFPO** / "Training Diffusion LLMs to Reason Fast and Furious via
+Reinforcement Learning" (2510.02212, Oct 2025, Zhao/Liang/Tang/Yao/Kallus,
+non-Kuleshov). RL-trains the base dLLM jointly for reasoning quality and
+speed, where the learned policy adaptively sets a **per-prompt confidence
+threshold** (one scalar per whole generation, not per-block or per-token)
+governing the main unmask-commit decision; off-policy RL with a two-stage
+likelihood approximation for sample efficiency.
+
+**Relevance to L1 (Gate-8 style read):** same shape as the already-logged
+Apple RL-unmasking paper (2512.09106) — a learned/RL policy over
+confidence replacing a hand threshold — but even coarser-grained
+(per-prompt vs. per-token) and, like the other main-loop competitors, has
+no corrector-sub-loop concept: it trains the base denoiser + commit policy
+jointly, with nothing analogous to ProSeCo's separate post-hoc correction
+pass. Sibling routine's own read: **"Not a scoop."** I concur — it doesn't
+touch L1's actual differentiator (a corrector-entry decision on an
+already-decoded block, orthogonal to the main unmasking loop's threshold,
+however that threshold is set or learned). This is a "yet another
+main-loop-threshold paper" data point, not competitive pressure on L1
+itself.
+
+**Bookkeeping note, not yet actioned:** LANDSCAPE.md now lists this as the
+11th entry in the pre-commit-eligibility/early-exit cluster (CadLLM,
+AdaBlock-dLLM, DepCap, Dynamic-dLLM, Apple-2512.09106, KLASS, TraceLock,
+LESS, MDPO/RCR, SWD, CORA-Diff, +DiFFPO). The routine brief's own
+Gate-8-competitor list (given to this routine at setup, 8 names) is now
+stale by 3+ entries independent of this addition — worth a Track D pass
+folding the current LANDSCAPE.md cluster count into
+`MEMO_V4_SKELETON.md`'s related-work paragraph next time that track comes
+up, same pattern as the 2026-08-23 10:2x entry.
+
+**Next fire on Track A:** single arxiv probe still suffices for the
+structural-block check. For genuine new-paper coverage while arxiv stays
+blocked, keep leaning on `remasking_test:research-ideation` HEAD advances
+as the only working channel — check its HEAD sha against the last-read
+value before assuming another quiet fire, the way this fire did.
