@@ -127,6 +127,29 @@ since pass 11 six hours ago and this fire's budget went to the caveat fold inste
 should re-check both. `arxiv.org`/`semanticscholar.org` still `EGRESS_BLOCKED` (Track A, no
 re-notify — already reported).
 
+Re-checked 2026-09-02 ~16:2x UTC (Track D pass 13, routed here after Track C's pass-11 triage gate
+held again — `s1/runs/` and repo root re-verified fresh this fire, still no `phase_b/` dir or
+`v2.jsonl` anywhere, pilot data still hasn't landed 10+ days after the Phase B code push — and
+Track B had no new code to audit, `l1_policy.py`/`phase_b_pilot.py` etc. unchanged since
+185e2ca/b0b1b8d). This pass actioned the explicit pickup left by `L1_LITERATURE.md`'s latest entry
+(commit `4326975`, 07:25 UTC today): pulled `remasking_test:research-ideation/LANDSCAPE.md` fresh
+(HEAD `76c79485`, 2026-09-02 13:48 UTC) and read its own KEY_COMPETITORS header note directly rather
+than trusting any prior count — the pre-commit-eligibility/early-exit cluster is now **12 entries**
+(CadLLM, AdaBlock-dLLM, DepCap, Dynamic-dLLM, Apple-2512.09106, KLASS, TraceLock, LESS, MDPO/RCR,
+SWD, CORA-Diff, DiFFPO/2510.02212), not the 10 this paragraph has cited since 2026-08-23. Two
+entries added since the last check: **MDPO/RCR** (2508.13148 — its RCR sub-mechanism is a static
+per-token confidence threshold, no corrector-loop concept, Gate-8-closed as non-overlapping) and
+**DiFFPO** (2510.02212 — RL-learned *per-prompt* confidence threshold for the main unmask-commit
+decision, even coarser-grained than the rest of the cluster; LANDSCAPE.md's own read and the sibling
+proseco fire's independent read both call it "not a scoop"). Neither changes L1's differentiation
+argument (still: main-loop commit-timing vs. ProSeCo's post-hoc corrector-burst budget on
+already-decoded blocks) — updated the paragraph below to the current count/list and refreshed the
+"last checked" date. `MEMO_L1_REV4.html` not re-fetched this pass (no reason to expect Sections 1-2
+source material moved; last confirmed byte-identical pass 11, 2026-08-25). No new
+`L1_AUDIT_FINDINGS.md` entries since #14 (still current through this pass). `v2.jsonl`/`phase_b/`
+absence and the `arxiv.org`/`semanticscholar.org` egress block are both already-reported, unchanged
+— no re-notify.
+
 **How to fill this in (<30 min):**
 1. `python phase_b_evaluate.py ~/proseco/phase_b/v2.jsonl` on the EC2 box (or wherever
    `v2.jsonl` lives once the run completes).
@@ -334,12 +357,12 @@ outcomes, just update which column is bolded/leading based on `{{VERDICT}}`.
 
 **Related-work paragraph (refresh before use):**
 > Existing training-free adaptive schedulers (CadLLM, AdaBlock-dLLM, DepCap, Dynamic-dLLM, KLASS,
-> SWD, CORA-Diff) and lightweight learned ones (Apple-RL, TraceLock, LESS) all key on a scalar
-> signal — usually mean confidence, sometimes a KL-derived stability index — to decide when to
-> skip/early-exit correction. L1's contribution is that it reads the *shape* of the predictor's
-> confidence distribution (min, std, entropy over active positions, not just the mean), which the
-> certified Phase A result shows carries additional predictive signal these scalar-keyed methods
-> discard.
+> SWD, CORA-Diff) and lightweight learned ones (Apple-RL, TraceLock, LESS, MDPO/RCR, DiFFPO) all key
+> on a scalar signal — usually mean confidence, sometimes a KL-derived stability index, sometimes an
+> RL-learned per-prompt or per-token threshold — to decide when to skip/early-exit correction. L1's
+> contribution is that it reads the *shape* of the predictor's confidence distribution (min, std,
+> entropy over active positions, not just the mean), which the certified Phase A result shows
+> carries additional predictive signal these scalar-keyed methods discard.
 >
 > **Independent precedent for the shape-vs-scalar thesis (new, found 2026-08-23):** six papers
 > outside this cluster converge on the same design principle from the other direction — that
@@ -356,12 +379,15 @@ outcomes, just update which column is bolded/leading based on `{{VERDICT}}`.
 > anything sent externally.
 >
 > This paragraph was last checked against `remasking_test:research-ideation/LANDSCAPE.md`'s
-> Gate-8 competitor list on 2026-08-23. Correction to the prior draft: the cluster is NOT 8 entries
-> matching the pill list above — LANDSCAPE.md's actual pre-commit-eligibility/early-exit cluster
-> already carries 10 (adds SWD/2604.17068 and CORA-Diff/2608.11235 to the original 8), both
-> confirmed non-overlapping with L1 by LANDSCAPE.md's own Gate-8 sweeps (2026-08-11 and 2026-08-15).
-> Re-verify no further entry has landed since, especially any single-scalar-vs-shape comparison
-> that would need citing or distinguishing.
+> Gate-8 competitor list on 2026-09-02 (LANDSCAPE.md HEAD `76c79485`). The
+> pre-commit-eligibility/early-exit cluster is now 12 entries, up from the 10 last cited here on
+> 2026-08-23: adds **MDPO/RCR** (2508.13148 — RCR's Gate-8 sweep already closed as
+> non-overlapping, static per-token confidence threshold, no corrector-loop concept) and
+> **DiFFPO** (2510.02212, found 2026-09-02 — RL-learned *per-prompt* confidence threshold for the
+> main unmask-commit decision, coarser-grained than the rest of the cluster; both LANDSCAPE.md's
+> own read and this repo's independent read call it "not a scoop"). Neither changes L1's
+> differentiation argument. Re-verify no further entry has landed since, especially any
+> single-scalar-vs-shape comparison that would need citing or distinguishing.
 
 ## Provenance block
 
