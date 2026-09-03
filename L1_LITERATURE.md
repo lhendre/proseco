@@ -386,3 +386,18 @@ structural-block check. For genuine new-paper coverage while arxiv stays
 blocked, keep leaning on `remasking_test:research-ideation` HEAD advances
 as the only working channel — check its HEAD sha against the last-read
 value before assuming another quiet fire, the way this fire did.
+
+---
+
+## 2026-09-03 06:2x UTC — Track A (routed here: oldest-touched of A/B/C/D, last substantive entry 09-02 14:25 UTC vs. Track B 09-03 04:26, Track C 09-03 02:26, Track D 09-02 16:28)
+
+Fresh independent probes, not a trust-the-log pass:
+
+- **arxiv.org/list/cs.LG/recent** — live WebFetch, `EGRESS_BLOCKED`. Unchanged since 08-19 (~15 days blocked).
+- **semanticscholar.org search** — live WebFetch, `EGRESS_BLOCKED`. Unchanged.
+- **remasking_test:research-ideation** — fresh fetch, HEAD still 76c7948 (2026-09-02, DiFFPO fold). No commits since. Nothing newer to fold; last fire's DiFFPO entry stands as the latest genuine addition.
+- **Pilot data** — `s1/runs/` re-listed directly: still tops out at `gsm8k_20260813_045034.jsonl` / `humaneval_20260813_045034.jsonl` (2026-08-13), no `phase_b/` dir, no `pilot.jsonl`/`v2.jsonl` anywhere in tree. ~21 days since the newest s1 run, ~5.2 days since the 08-29 02:2x stall escalation, no state change.
+
+No new competitor, no state change anywhere. No PushNotification — both structural blockers (egress proxy, EC2 pilot stall) are unchanged and already covered by the standing 08-29 escalation; nothing meets this fire's urgency bar.
+
+**Next fire on Track A:** same two-probe pattern (arxiv + semanticscholar direct, remasking_test HEAD diff) until either egress unblocks or the sibling routine's HEAD advances again.
