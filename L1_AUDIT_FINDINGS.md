@@ -1230,3 +1230,67 @@ Track D pass folds "pitch draft stale, needs the HumanEval-contradiction +
 finding #4 caveats before it goes to Yair" into `MEMO_V4_SKELETON.md`'s
 caveat list, since the memo is the more likely actual deliverable and
 should not inherit the same unreconciled framing.
+
+## 2026-09-03 — Track B audit (fire N+13, commit b0b1b8d still current)
+
+Routed here because `L1_AUDIT_FINDINGS.md` was the oldest-touched of the
+four track files (last substantive entry 2026-08-26T20:26:44Z, ~7 days
+stale vs. Track A/C/D all touched within the last day). Fresh independent
+re-read from a clean clone, not trusting prior fires' hash claims.
+
+**Confirmed unchanged:** `l1_policy.py`, `l1_training.py`, `l1_weights.json`,
+`llada/generate.py`, `PHASE_B_L1_DESIGN.md` all still at 185e2ca
+(2026-08-19); `phase_b_pilot.py` / `phase_b_evaluate.py` /
+`PHASE_B_PREREG_2026-08-22.md` still at b0b1b8d (2026-08-23). No code has
+moved since fire N+11/N+12 — findings #1-14 all still apply as written.
+
+**What this pass actually did** (not a rubber-stamp): re-read
+`phase_b_pilot.py` end to end and `l1_policy.py` end to end in full, then
+cross-checked two specific angles the audit brief calls out that hadn't had
+a dedicated pass recently:
+
+- **Reproducibility / unseeded state**: `l1_training.py`'s
+  `GroupShuffleSplit` is `random_state=42` and `torch.manual_seed(args.seed)`
+  is called; `phase_b_pilot.py`'s `load_benchmark` uses `ds.shuffle(seed=seed)`
+  with the CLI's `--seed` (default 0) consistently for both gsm8k and the
+  held-out offset. No unseeded shuffle or order-dependent state found in
+  either file.
+- **Fair-comparison code paths (goal (c))**: re-derived the
+  `corrector_policy is None` vs. not-`None` branch in `generate.py` (lines
+  199-208) that produces the "fixed" arm's structural head-start already
+  on file as finding #8 — independently arrived at the same conclusion
+  (the `fixed` arm skips `features_from_predictor_logits` because
+  `phase_b_pilot.py.run_one` special-cases `policy_spec == "fixed"` to
+  `corrector_policy=None`, so it never touches `FixedPolicy`, whose
+  `should_invoke_at_step` wouldn't satisfy `generate.py`'s
+  `.should_invoke(features)` call anyway). This is finding #8's territory
+  exactly, including the wall-clock-not-NFE caveat; no new angle survived
+  scrutiny beyond what's already written up there.
+- **Matched-FLOPs accounting (goal (d))**: `total_nfe`/`predictor_nfe`/
+  `corrector_nfe` increments (lines 185-186, 269-270) are untouched by
+  which branch computes `phase_b_features`, since that computation is
+  pure post-hoc tensor ops on already-computed logits with no `model()`
+  call — confirms finding #8's claim that the head-start doesn't leak
+  into the NFE-matching comparison. No new accounting bug found.
+
+**No new finding.** All three angles converged on ground already covered
+by findings #8/#11 or came back clean. Not manufacturing a new numbered
+finding against unchanged code just to have output this pass — the prior
+12 audit fires' "no new finding" verdicts stand independently re-verified.
+
+`s1/runs/` re-listed directly: still tops out at
+`gsm8k_20260813_045034.jsonl`/`humaneval_20260813_045034.jsonl`
+(2026-08-13), no `phase_b/` dir anywhere — pilot data still hasn't landed,
+~21 days after the newest S1 run and ~15 days after Phase B code was
+described as pushed. `remasking_test:research-ideation` HEAD unchanged at
+76c7948 (2026-09-02). Live `WebFetch` to `arxiv.org/list/cs.LG/recent`
+independently re-confirmed `EGRESS_BLOCKED`, unchanged since before the
+08-29 02:2x escalation.
+
+No PushNotification this fire — both structural blockers (EC2 pilot
+stalled, egress proxy blocking arxiv/semanticscholar) are unchanged from
+the single escalation already sent on 2026-08-29, now ~124h/5.2d ago; no
+new finding, no state change. Next Track B pass: same order (unseeded
+state → fair-comparison paths → NFE accounting) if code is still
+unchanged; if `phase_b_pilot.py`/`l1_policy.py`/`generate.py` hashes move,
+prioritize re-reading the diff over the fixed checklist above.
