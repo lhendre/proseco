@@ -150,6 +150,31 @@ source material moved; last confirmed byte-identical pass 11, 2026-08-25). No ne
 absence and the `arxiv.org`/`semanticscholar.org` egress block are both already-reported, unchanged
 — no re-notify.
 
+Re-checked 2026-09-03 ~08:2x UTC (Track D pass 14, oldest-touched of A/B/C/D this fire — Track D
+last touched 16:28 UTC 09-02 vs. Track C 02:26, Track B 04:26, Track A 06:27 today). Independently
+re-verified rather than trusting prior passes' claims: `s1/runs/` re-listed directly, still tops
+out at `gsm8k_20260813_045034.jsonl`/`humaneval_20260813_045034.jsonl` (2026-08-13), no `phase_b/`
+dir or `v2.jsonl`/`pilot.jsonl` anywhere in the tree — pilot data still hasn't landed, ~21 days
+after the newest S1 run and ~15 days after the Phase B code push. `l1_policy.py`/`l1_training.py`/
+`l1_weights.json`/`llada/generate.py`/`PHASE_B_L1_DESIGN.md` still `185e2ca`; `phase_b_pilot.py`/
+`phase_b_evaluate.py`/`PHASE_B_PREREG_2026-08-22.md` still `b0b1b8d` — no new
+`L1_AUDIT_FINDINGS.md` entries to fold (Track B's fire two hours earlier this same cycle
+independently re-derived finding #8 and found nothing new). `remasking_test:research-ideation`
+HEAD unchanged at `76c7948` since pass 13 — Gate-8 competitor count (12) and the related-work
+paragraph below stand as last updated.
+
+This pass re-fetched `MEMO_L1_REV4.html`'s canonical source via live `WebFetch` (not just a repo
+read) to close the gap prior passes flagged but didn't always re-check every time: does the
+*hosted* artifact match the repo copy, in case Lucas edited the live version without pushing to
+git? Confirmed byte-identical (26,722 bytes, same rev. 4 / 2026-08-16 content, same pilot table,
+same pre-committed success criteria, same provenance block referencing
+`~/proseco/phase_b/pilot.jsonl` and `v2.jsonl` "in flight" as of 2026-08-23) — no drift between
+hosted and repo versions, no Section 1-2 changes needed.
+
+`arxiv.org`/`semanticscholar.org` egress block and the EC2 pilot stall are both unchanged from the
+single escalation already sent 2026-08-29 02:2x UTC, now ~124.5h/5.2 days ago — no re-notify, per
+Track A/B's independent re-verification this same cycle.
+
 **How to fill this in (<30 min):**
 1. `python phase_b_evaluate.py ~/proseco/phase_b/v2.jsonl` on the EC2 box (or wherever
    `v2.jsonl` lives once the run completes).
