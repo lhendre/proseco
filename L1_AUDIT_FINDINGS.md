@@ -1294,3 +1294,55 @@ new finding, no state change. Next Track B pass: same order (unseeded
 state → fair-comparison paths → NFE accounting) if code is still
 unchanged; if `phase_b_pilot.py`/`l1_policy.py`/`generate.py` hashes move,
 prioritize re-reading the diff over the fixed checklist above.
+
+## 2026-09-03 — Track B audit (fire N+14, commit b0b1b8d still current)
+
+Routed here as the oldest-touched of the four track files (last substantive
+entry 04:26 UTC today, fire N+13). Confirmed unchanged: `l1_policy.py`,
+`l1_training.py`, `l1_weights.json`, `llada/generate.py`,
+`PHASE_B_L1_DESIGN.md` still at `185e2ca` (2026-08-19); `phase_b_pilot.py`,
+`phase_b_evaluate.py`, `PHASE_B_PREREG_2026-08-22.md` still at `b0b1b8d`
+(2026-08-23). Findings #1-14 all still apply as written.
+
+**What this pass did differently from N+13:** rather than re-diffing code
+against itself, read `l1_weights.json`'s actual numeric content (not just
+its hash) and cross-checked feature-key *order* end to end across all three
+independent copies of `FEATURE_KEYS` that finding #12 flagged as a drift
+risk:
+
+- `l1_weights.json.meta.features` (what the MLP was actually trained and
+  reported AUC=0.9589 against):
+  `[predictor_conf_mean_active, predictor_conf_min_active,
+  predictor_conf_std_active, predictor_entropy_mean_active,
+  predictor_entropy_max_active]`
+- `l1_training.py`'s `FEATURE_KEYS` (line 24, builds the training `X`
+  array via `[r.get(k) for k in FEATURE_KEYS]`): identical order.
+- `l1_policy.py`'s `FEATURE_KEYS` (line 20, builds the live inference `x`
+  vector via `[features[k] for k in FEATURE_KEYS]`, i.e. does *not* rely on
+  dict iteration order): identical order.
+
+All three agree today, so `W1`'s row order matches what both training and
+live inference index into — no train/inference feature-order skew, which
+would be a silent-corruption bug of exactly finding #12's shape (no crash,
+no NaN, just a policy scoring against the wrong feature per row). This is
+the same conclusion N+13 reached from the code-structure side; this pass
+independently confirms it from the data side (the weights file itself)
+rather than re-deriving it from reading `generate.py`'s two code paths
+again. No new finding — this closes out finding #12's specific "did it
+actually drift" question for the current weights file, though the
+structural risk (three hand-copies, no shared constant, no test) that
+finding #12 recommends fixing remains open and unchanged.
+
+**No new finding.** `s1/runs/` re-listed directly: still 15 files, newest
+`gsm8k_20260813_045034.jsonl`/`humaneval_20260813_045034.jsonl`
+(2026-08-13) — pilot data still hasn't landed. Live `WebFetch` to
+`arxiv.org/list/cs.LG/recent` re-confirmed `EGRESS_BLOCKED`. Both
+structural blockers unchanged from the 08-29 escalation (now ~136h/5.7d)
+and from today's 12:29 UTC duration re-flag; no new state since that
+re-flag two hours ago, so no PushNotification this fire.
+
+Next Track B pass: if code is still unchanged, consider actually running
+`l1_training.py`'s training loop against a synthetic/held-out slice to
+verify `final_test_auc=0.9589` is reproducible end-to-end rather than only
+verifying static consistency (feature order, seeds) — that would be a
+genuinely new angle not yet attempted in any of the 14 prior passes.
