@@ -401,3 +401,18 @@ Fresh independent probes, not a trust-the-log pass:
 No new competitor, no state change anywhere. No PushNotification — both structural blockers (egress proxy, EC2 pilot stall) are unchanged and already covered by the standing 08-29 escalation; nothing meets this fire's urgency bar.
 
 **Next fire on Track A:** same two-probe pattern (arxiv + semanticscholar direct, remasking_test HEAD diff) until either egress unblocks or the sibling routine's HEAD advances again.
+
+---
+
+## 2026-09-03 16:2x UTC — Track A (routed here: oldest-touched of A/B/C/D, last touch 06:27 UTC vs. Track D 08:26, Track C 10:26, Track B 14:26)
+
+Fresh independent probes:
+
+- **arxiv.org/list/cs.LG/recent** — live WebFetch, `EGRESS_BLOCKED`. Unchanged since 08-19 (~15.9 days blocked).
+- **semanticscholar.org search** — live WebFetch, `EGRESS_BLOCKED`. Unchanged.
+- **remasking_test:research-ideation** — `git ls-remote` shows HEAD moved since the 06:2x fire's read (76c7948 → 5265a8a). Cloned and inspected: the new commit is the sibling's own Mode B fire closing its Gate 8 cross-check obligation for DiFFPO (added 09-02) against all its active ideas — confirms no active idea overlaps DiFFPO's mechanism, no new competitor, no IDEAS.md/LANDSCAPE.md competitor-count change. Bookkeeping only, nothing to fold here (DiFFPO itself was already folded into this file's 09-02 entry).
+- **Pilot data** — `s1/runs/` re-listed directly: still tops out at `gsm8k_20260813_045034.jsonl` / `humaneval_20260813_045034.jsonl` (2026-08-13), no `phase_b/` dir, no `pilot.jsonl`/`v2.jsonl` anywhere in tree. No change since the 06:2x fire's read.
+
+No new competitor, no state change that meets the notification bar. A PushNotification was already sent this fire-cycle (12:2x UTC, duration re-flag on the standing 08-29 escalation) and nothing new has emerged since — no re-notify.
+
+**Next fire on Track A:** same probe pattern (arxiv + semanticscholar direct, remasking_test HEAD diff) until either egress unblocks or the sibling routine surfaces a genuinely new competitor.
