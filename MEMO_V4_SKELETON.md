@@ -414,6 +414,41 @@ outcomes, just update which column is bolded/leading based on `{{VERDICT}}`.
 > differentiation argument. Re-verify no further entry has landed since, especially any
 > single-scalar-vs-shape comparison that would need citing or distinguishing.
 
+Re-checked 2026-09-03 ~18:2x UTC (Track D pass 15, oldest-touched of A/B/C/D this fire — Track D
+last touched 08:26 UTC vs. Track C 10:26, Track B 14:26, Track A 16:26 today). Independently
+re-verified rather than trusting prior passes' claims: `s1/runs/` re-listed directly from a fresh
+clone, still tops out at `gsm8k_20260813_045034.jsonl`/`humaneval_20260813_045034.jsonl`
+(2026-08-13), no `phase_b/` dir or `v2.jsonl`/`pilot.jsonl` anywhere in the tree — pilot data still
+hasn't landed. `l1_policy.py`/`l1_training.py`/`l1_weights.json`/`llada/generate.py`/
+`PHASE_B_L1_DESIGN.md` confirmed still `185e2ca`; `phase_b_pilot.py`/`phase_b_evaluate.py` still
+`b0b1b8d` (matches Track B's own independent re-check two hours earlier this cycle, no new
+`L1_AUDIT_FINDINGS.md` entry beyond #14/#14-addendum to fold).
+
+This pass re-fetched `MEMO_L1_REV4.html`'s canonical source live via `WebFetch` (not a repo read)
+and read the full body rather than diffing byte-count alone: confirmed still rev. 4, dated
+2026-08-16, same Phase A/pilot tables, same pre-committed PASS/AMBIGUOUS/KILL criteria, same
+provenance block referencing `~/proseco/phase_b/pilot.jsonl` (400 runs, landed) and
+`~/proseco/phase_b/v2.jsonl` as "in flight" as of 2026-08-23 — still no v2 data. No Section 1/2
+drift between hosted and repo copies.
+
+`remasking_test:research-ideation` HEAD advanced to `5265a8a` (2026-09-03 13:46 UTC) since pass
+14's `76c7948` — read the actual diff (not just the commit title) to confirm: it's a Gate-8 sweep
+closure for DiFFPO against remasking_test's own active-idea list (formalizing that no active idea
+there overlaps DiFFPO's mechanism), zero `KEY_COMPETITORS`/`LANDSCAPE.md` entries added or changed.
+Note the sibling repo's own competitor count for L1 reads "ten" in that commit message — this is
+its narrower own-idea-tracking count, not the same as this paragraph's 12-entry
+pre-commit-eligibility/early-exit cluster (which additionally counts SWD/CORA-Diff); already
+reconciled in pass 13's entry, not a new discrepancy. Gate-8 competitor count (12) and the
+related-work paragraph below stand unchanged.
+
+`arxiv.org`/`semanticscholar.org` egress block and the EC2 pilot stall are both unchanged from the
+single escalation sent 2026-08-29 02:2x UTC (~136h/5.7d ago) and the duration-based re-flag already
+sent this same cycle at 12:2x UTC (~130h/5.4d then) — no third notification; nothing new since
+either. Next fire: whichever of A/B/C/D is oldest-touched by then (currently would be Track C, last
+substantive touch 10:26); EC2 pilot landing (`s1/runs/` new file or a `phase_b/` dir appearing)
+remains the single unblock for Tracks B/C/D's stalled items; egress unblock remains the single
+unblock for Track A.
+
 ## Provenance block
 
 Copy unchanged from `MEMO_L1_REV4.html`, then append:
