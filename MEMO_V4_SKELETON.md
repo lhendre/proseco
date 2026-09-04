@@ -457,3 +457,36 @@ Phase B v2 data: ~/proseco/phase_b/v2.jsonl · {{n_gsm8k}} GSM8K + {{n_humaneval
   5 policies, single seed, held-out from L1 training pool (TRAIN_POOL_N=100)
 Evaluated: phase_b_evaluate.py, rescore-on-load enabled
 ```
+
+## Pass 16 (2026-09-04, Track D)
+
+Routed here as oldest-touched track file (`MEMO_V4_SKELETON.md` 18:26 UTC vs. Track C 22:25,
+Track B 00:29, Track A 02:25 — all Sep 3/4). Independent re-verification from a fresh clone rather
+than trusting prior passes' claims:
+
+- `s1/runs/` re-listed directly: still tops out at `gsm8k_20260813_045034.jsonl` /
+  `humaneval_20260813_045034.jsonl` (2026-08-13). No `phase_b/` dir, `v2.jsonl`, or `pilot*.jsonl`
+  anywhere in the tree — pilot data still hasn't landed, now ~22 days after the newest `s1` run.
+- `l1_policy.py` / `l1_training.py` / `l1_weights.json` / `llada/generate.py` /
+  `PHASE_B_L1_DESIGN.md` confirmed still `185e2ca` (2026-08-19); `phase_b_pilot.py` /
+  `phase_b_evaluate.py` still `b0b1b8d` (2026-08-23) — matches Track B's own independent re-check
+  ~2h earlier this cycle (`3ee825d`), no new `L1_AUDIT_FINDINGS.md` entry to fold.
+- Live `WebFetch` of `MEMO_L1_REV4.html`'s hosted artifact (full body read): still rev. 4, dated
+  2026-08-16, same Phase A/pilot tables, same PASS/AMBIGUOUS/KILL criteria, same provenance block
+  ("pilot.jsonl" 400 runs landed, "v2.jsonl" "in flight" as of 2026-08-23, still not landed). No
+  Section 1/2 drift.
+- `remasking_test:research-ideation` HEAD confirmed still `5265a8a` (2026-09-03 13:46 UTC), same
+  commit Track A/D already reconciled — cloned fresh and grepped `LANDSCAPE.md`'s own Gate-8 tally
+  directly: "CadLLM, AdaBlock-dLLM, DepCap, Dynamic-dLLM, Apple-2512.09106, KLASS, TraceLock, LESS,
+  MDPO/RCR, SWD, CORA-Diff — this makes eleven" plus DiFFPO = twelve, independently confirms this
+  memo's standing Gate-8 count of 12 with no drift.
+- `arxiv.org` egress re-checked directly this pass: still `EGRESS_BLOCKED`, unchanged since 08-19.
+
+No new state anywhere. No PushNotification — nothing meets the urgency bar (no pilot data landed,
+no audit finding invalidating results, no new competitor, no feature breakthrough); the standing
+08-29 escalation was already re-flagged at the 12:2x UTC duration checkpoint on 09-03, now at
+~146h/6.1d with no change since. Next fire: whichever of A/B/C is oldest-touched (Track A 02:25 and
+Track B 00:29 today are both newer than this pass; check exact ordering at fire time — Track C
+`7dc1bbb` at 22:25 on 09-03 is likely oldest as of this writing). EC2 pilot landing (`s1/runs/` new
+file or a `phase_b/` dir appearing) remains the single unblock for Tracks B/C/D's stalled items;
+egress unblock remains the single unblock for Track A.
