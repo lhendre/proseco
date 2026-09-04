@@ -1513,3 +1513,95 @@ Next Track B pass: finish the n=80/n=20 coverage configs cut short here if
 a fire has slack (not urgent — n=40 is the design point that matters); or
 pick up N+15's other still-open candidate (`dataloader.py`/`classifier.py`/
 `main.py`, never reviewed by any prior Track B fire).
+
+## 2026-09-04 — Track B audit (fire N+17, commit 4df72c2 still current)
+
+Routed here as oldest-touched of the four track files
+(`L1_AUDIT_FINDINGS.md` last touched 08:29 UTC vs. Track A 10:25, Track D
+12:29, Track C 14:26). Re-confirmed via direct hash lookup: `l1_policy.py`,
+`l1_training.py`, `l1_weights.json`, `llada/generate.py`,
+`PHASE_B_L1_DESIGN.md` still `185e2ca` (2026-08-19); `phase_b_pilot.py`/
+`phase_b_evaluate.py`/`PHASE_B_PREREG_2026-08-22.md` still `b0b1b8d`
+(2026-08-23) — no code diff since N+16, findings #1-15 unchanged.
+`s1/runs/` still the same 16 files (newest 2026-08-13), no `phase_b/` dir
+or `v2.jsonl`/`pilot*.jsonl` anywhere — pilot data still hasn't landed.
+
+**First: checked N+16's "never-reviewed" lead before acting on it, and it
+doesn't hold up.** N+16 suggested `dataloader.py`/`classifier.py`/`main.py`
+as the next unreviewed files. Grepped every file actually on the Phase B
+pilot's import path (`phase_b_pilot.py` → `llada.generate`, `l1_policy`,
+`s1.run_s1`; `l1_policy.py`/`l1_training.py`/`phase_b_evaluate.py`
+themselves) for references to `classifier`, `dataloader`, or a `main`
+import: zero hits. None of those three files are reachable from the
+pilot's actual code path — they're leftover S1-era scaffolding, not part
+of what determines fair-comparison correctness or matched-FLOPs
+accounting for Phase B. Auditing them wouldn't serve this track's
+mandate ((c)/(d) above are about the `fixed`/`cadllm_linear`/`l1_mlp`
+comparison, which never touches these three files), so declining that
+lead rather than manufacturing findings in out-of-scope code.
+
+**Instead, completed N+16's other still-open item: the n=80/n=20 coverage
+configs cut short by that fire's time budget.** Same method (i.i.d.
+synthetic paired Bernoulli, `paired_bootstrap` imported unmodified from
+this checkout, `n_boot=500`, 1,500 sims/config, function's own fixed
+`seed=42` at every call site as in real usage):
+
+```
+   n  acc_a  acc_b  true_d   cov95%  mean_width  mean_obs_d
+  80   0.55   0.55   0.000   93.93%       0.302      -0.001
+  80   0.60   0.50   0.100   93.07%       0.301       0.099
+  80   0.70   0.55   0.150   92.87%       0.290       0.149
+  80   0.90   0.80   0.100   94.80%       0.215       0.100
+  20   0.55   0.55   0.000   95.13%       0.595      -0.001
+  20   0.60   0.50   0.100   92.53%       0.589       0.102
+  20   0.70   0.55   0.150   91.20%       0.570       0.149
+  20   0.90   0.80   0.100   90.53%       0.414       0.099
+```
+
+**Extends finding #15 (still not a new numbered finding — same
+mechanism, now characterized across N): the undercoverage is not specific
+to N=40, and worsens as N shrinks.** n=80 sits ~92.9-94.8% (comparable to
+n=40's 93.5-93.9%); n=20 is materially worse at the non-null, non-extreme
+configs — 91.2-92.5% at the two middle rows, and 90.53% at
+acc_a=0.90/acc_b=0.80, roughly 4.5pp below nominal and the single worst
+reading across all three N values tested so far. With 1,500 sims the
+Monte-Carlo SE near 90-95% coverage is ~0.6-0.8pp, so the n=20 rows are
+multiple SE below nominal, not noise. Pattern is monotonic in N (worse at
+n=20 than n=40 than n=80) and consistent with the known asymptotic
+justification for percentile-bootstrap coverage on binary data —
+undercoverage shrinks as N grows, exactly what's observed here.
+
+**Practical relevance to the actual pilot design:** the pre-registered
+primary comparison is N=40/benchmark, which N+16 already covered — this
+fire's n=80/n=20 rows are context, not a new operating point the pilot
+itself uses. But `MEMO_V4_SKELETON.md`'s per-policy-x-budget breakdown
+tables imply the memo will eventually report accuracy deltas on
+subgroups (e.g. per-budget slices) smaller than the full N=40, plausibly
+down near n=20 — if so, this result says those subgroup CIs should be
+read as more anti-conservative than the headline N=40 comparison, not
+equally trustworthy. Flagging this explicitly for whoever fills in the
+memo tables, since it's not obvious from finding #15 alone that the
+effect gets worse rather than staying flat at smaller subgroup sizes.
+
+**Not PushNotification-worthy:** this is a quantitative extension of an
+already-logged, already-non-urgent finding, using the same synthetic
+i.i.d. methodology (still a pessimistic/conservative stress test relative
+to the real correlated-error case, per N+16's reasoning) — no new
+qualitative risk to the pilot's headline N=40 PASS/AMBIGUOUS call.
+
+No new state elsewhere: `remasking_test:research-ideation` HEAD confirmed
+still `5265a8a` (2026-09-03 13:46 UTC) via `git ls-remote`; `arxiv.org`
+still `EGRESS_BLOCKED` on a direct check. Standing 08-29 02:2x escalation
+now ~158h/6.6d, last re-flagged 09-03 12:2x (~130h) — no PushNotification
+this fire, nothing crosses the urgency bar.
+
+Next Track B pass: `classifier.py`/`dataloader.py`/`main.py` are now
+confirmed out of scope (see above) — drop that lead. Remaining unreviewed
+ground within actual scope: `s1/analyze.py`'s finding #14 verdict logic
+was flagged MEDIUM at N+9 but never re-verified against a live pilot
+`v2.jsonl` (blocked until one lands); until then, further Track B value
+is in either finishing methodological stress-tests of `phase_b_evaluate.py`
+(e.g. a BCa or paired-permutation CI implemented as a comparison point,
+not a replacement) or a fresh line-by-line diff of `llada/generate.py`'s
+`corrector_policy` branch against upstream LLaDA `generate.py` if that
+diff has never been done directly (check before assuming).
