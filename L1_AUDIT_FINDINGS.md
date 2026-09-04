@@ -1346,3 +1346,85 @@ Next Track B pass: if code is still unchanged, consider actually running
 verify `final_test_auc=0.9589` is reproducible end-to-end rather than only
 verifying static consistency (feature order, seeds) — that would be a
 genuinely new angle not yet attempted in any of the 14 prior passes.
+
+---
+
+## 2026-09-04 — Track B audit (fire N+15, commit 7dc1bbb still current)
+
+Routed here as oldest-touched of the four track files (`L1_AUDIT_FINDINGS.md`
+last substantive entry 2026-09-03T14:26:48Z, vs. A/C/D all touched within the
+prior ~10h). Confirmed unchanged via direct hash lookup, not trusting prior
+fires' claims: `l1_policy.py`, `l1_training.py`, `l1_weights.json`,
+`llada/generate.py`, `PHASE_B_L1_DESIGN.md` still all last-touched at
+`185e2ca` (2026-08-19); `phase_b_pilot.py`, `phase_b_evaluate.py`,
+`PHASE_B_PREREG_2026-08-22.md` still at `b0b1b8d` (2026-08-23). Findings
+#1-14 all still apply as written; #1-#2 remain the only fixed ones.
+
+**Acted on N+14's suggested next angle** (actually run `l1_training.py`'s
+training loop to check `final_test_auc=0.9589` reproduces, rather than only
+checking static consistency): this sandbox has no `torch` preinstalled.
+`pip install scikit-learn` succeeded quickly; `pip install torch
+--index-url https://download.pytorch.org/whl/cpu` failed outright — the
+policy proxy returns `403 Forbidden` on the `download.pytorch.org` CONNECT
+tunnel (a different host than the arxiv/semanticscholar block already on
+file, so this is a separate, narrower egress gap, not the same one). Fell
+back to plain `pip install torch` from `pypi.org` (which *is* reachable —
+confirmed `pypi.org/simple/torch/` returns 200 and a `numpy` wheel installs
+in under a second): this did start downloading but did not complete inside
+a 150s budget and was killed, vs. this fire's ~20min total cap — CPU torch
+wheels run several hundred MB, evidently too slow over whatever the actual
+throughput is for a full download+install alongside everything else this
+fire needs to do. Not retrying with a longer budget this fire since it would
+eat the entire time cap on an install rather than the audit.
+
+**But the bigger blocker, found before the install even mattered:** with
+`scikit-learn` available, reimplemented `load_records`/`make_X_y_g` (minus
+the `torch` bits) directly against this checkout's actual `s1/runs/*.jsonl`
+files to at least check dataset-availability for the split/stratification
+question (finding #11), independent of whether torch installs. Result:
+**zero of the 16 files' rows contain a `predictor_conf_mean_active` key** —
+`load_records`'s own `if "predictor_conf_mean_active" in r` filter admits
+nothing, so `recs` is empty and `l1_training.py --runs_dir s1/runs` would
+raise `RuntimeError: no records found` if invoked in this checkout right
+now. This reconfirms fire N+6's finding via direct data inspection rather
+than a field-name grep of one sample line: **this repo checkout structurally
+cannot reproduce `final_test_auc=0.9589`, full stop, independent of which
+Python packages are available.** The confidence-logged data
+`l1_weights.json` was actually trained on has never been committed here —
+it exists only on the EC2 box's `~/proseco/s1/runs`, per `l1_training.py`'s
+own hardcoded default path (`/home/ec2-user/proseco/s1/runs`) which doesn't
+match this checkout's `s1/runs` contents at all. So N+14's proposed
+reproducibility check is not something any future automated fire can do
+from a fresh git clone regardless of environment fixes — it would need to
+run *on the EC2 box itself*, with Lucas's involvement, or with the raw
+per-invocation logs pulled off EC2 into this repo first (which nothing
+currently does — `s1/runs/` here has been static at the same 16
+pre-Phase-B files since before this audit file existed).
+
+**No new numbered finding** — this is a scoping result (what's checkable
+from a clean clone vs. not) rather than a code defect, so not adding a
+finding number for it. Recording it so no future fire re-attempts the same
+torch-install detour without first checking `s1/runs/` for the required
+field, and so it's on record that "verify 0.9589 reproduces" needs an EC2
+step this routine cannot perform, not just a pip install.
+
+Structural blockers unchanged: EC2 pilot still hasn't landed any
+`phase_b/pilot.jsonl`/`v2.jsonl` in this tree (`s1/runs/` still the same 16
+files, newest 2026-08-13); the 08-29 escalation is now ~150h/6.25d old with
+the last duration re-flag at 09-03 12:29 UTC (~36h ago). No new finding, no
+new state beyond the scoping result above — not urgent enough on its own to
+re-flag via PushNotification (it narrows *how* the existing "no pilot data"
+blocker could ever be resolved by this routine, it doesn't change whether
+it's resolved), so no PushNotification this fire.
+
+Next Track B pass: the training-loop-reproduction angle is closed out for
+this environment (see above) — pick a different angle. Candidates not yet
+tried: read `dataloader.py`/`classifier.py`/`main.py` (never reviewed by any
+prior Track B fire, per a `grep -l` sweep this pass didn't have time to run
+after the install detour) for anything touching the L1/Phase-B path, or
+check whether `PHASE_B_PREREG_2026-08-22.md`'s bootstrap-CI methodology
+(`phase_b_evaluate.py`'s `paired_bootstrap`, previously verified as
+"correct paired-bootstrap construction" at fire N+4 but never checked for
+CI *coverage* under a synthetic simulation) actually achieves nominal
+coverage — that's checkable with `scikit-learn`/`numpy` alone, no torch
+needed, and wasn't attempted this fire.
