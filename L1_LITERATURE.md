@@ -431,3 +431,18 @@ Fresh independent probes, not a trust-the-log pass:
 No new competitor, no state change anywhere. Cross-checked Track B's latest entry (fire N+15, 09-04 00:29 UTC): a scoping result, not a new finding — confirms the EC2-only reproducibility gap but doesn't change the standing blocker. No PushNotification this fire — both structural blockers (egress proxy, EC2 pilot stall) are unchanged, last re-flagged 09-03 12:2x UTC (~14h ago), nothing new meets this fire's urgency bar.
 
 **Next fire on Track A:** same three-probe pattern (arxiv + semanticscholar direct, remasking_test HEAD diff, s1/runs listing) until either egress unblocks, the sibling routine surfaces a genuinely new competitor, or pilot data lands.
+
+---
+
+## 2026-09-04 10:2x UTC — Track A (routed here: oldest-touched of A/B/C/D, last touch 02:25 UTC vs. Track D 04:25, Track C 06:27, Track B 08:29)
+
+Fresh independent probes, not a trust-the-log pass:
+
+- **arxiv.org/list/cs.LG/recent** — live WebFetch, `EGRESS_BLOCKED`. Unchanged since 08-19 (~16.6 days blocked).
+- **api.semanticscholar.org/graph/v1/paper/search** — live WebFetch, `EGRESS_BLOCKED`. Unchanged.
+- **remasking_test:research-ideation** — fresh clone, HEAD still `5265a8a` (2026-09-03 13:46 UTC, DiFFPO Gate-8 sweep closure). No commits since the last two fires' reads. Nothing new to fold.
+- **Pilot data** — `s1/runs/` re-listed from a fresh clone: still the same 16 pre-Phase-B files (`gsm8k`/`humaneval` `.jsonl` pairs), newest `*_20260813_045034.jsonl`. No `phase_b/` dir, no `pilot.jsonl`/`v2.jsonl` anywhere in the tree. ~22 days since the newest s1 run.
+
+No new competitor, no state change anywhere. Both structural blockers (egress proxy since 08-19, EC2 Phase B pilot stall since the 08-29 02:2x escalation — now ~152h/~6.3 days, ~22h since the last duration re-flag at 09-03 12:29 UTC) are unchanged. No PushNotification this fire: nothing new has emerged since the last re-flag, and the established cadence on this standing issue has been multi-day intervals between re-flags (08-29 → 09-03, ~4.4 days), not every-fire escalation. Worth a fresh duration re-flag once this gap grows another day or two, or immediately if pilot data lands, a genuine new competitor appears, or egress unblocks.
+
+**Next fire on Track A:** same three-probe pattern (arxiv + semanticscholar direct, remasking_test HEAD diff, s1/runs listing) until either egress unblocks, the sibling routine surfaces a genuinely new competitor, or pilot data lands.
