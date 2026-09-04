@@ -1428,3 +1428,88 @@ check whether `PHASE_B_PREREG_2026-08-22.md`'s bootstrap-CI methodology
 CI *coverage* under a synthetic simulation) actually achieves nominal
 coverage — that's checkable with `scikit-learn`/`numpy` alone, no torch
 needed, and wasn't attempted this fire.
+
+---
+
+## 2026-09-04 — Track B audit (fire N+16, commit 63fd901 still current)
+
+Routed here as oldest-touched of the four track files. Re-confirmed via
+direct hash lookup that `l1_policy.py`, `l1_training.py`, `l1_weights.json`,
+`llada/generate.py`, `PHASE_B_L1_DESIGN.md` are still at `185e2ca`
+(2026-08-19), `phase_b_pilot.py`/`phase_b_evaluate.py`/
+`PHASE_B_PREREG_2026-08-22.md` still at `b0b1b8d` (2026-08-23), and
+`s1/runs/` is still the same 16 files (newest 2026-08-13) — pilot data
+still hasn't landed, now ~6.25 days since the 08-29 escalation.
+
+**Acted on N+15's suggested next angle: CI coverage of `paired_bootstrap`
+under synthetic simulation.** `numpy` (not preinstalled, unlike the
+`scikit-learn` fire N+15 got in) installed cleanly and fast from PyPI —
+worth noting for future fires since N+15 hit a wall trying to get `torch`
+the same way: plain `pip install numpy` is not blocked, only the
+`download.pytorch.org` CONNECT tunnel is. Imported `paired_bootstrap`
+directly from this checkout's `phase_b_evaluate.py` (no modification) and
+drove it against synthetic paired Bernoulli data at the pilot's actual
+pre-registered design point (N=40 prompts/benchmark) plus a few accuracy
+levels, checking whether the reported 95% CI actually contains the true
+accuracy delta ~95% of the time across 1,500 independent simulated
+datasets per config (bootstrap resampling reuses the function's own fixed
+`seed=42`, exactly as every real call site does — not varied, since that's
+the actual deployed behavior being tested, not an artifact of my harness):
+
+```
+   n  acc_a  acc_b  true_d   cov95%  mean_width  mean_obs_d
+  40   0.55   0.55   0.000   95.93%       0.424       0.002
+  40   0.60   0.50   0.100   93.87%       0.422       0.100
+  40   0.70   0.55   0.150   93.47%       0.407       0.151
+  40   0.90   0.80   0.100   93.53%       0.300       0.098
+```
+
+**New finding (#15, minor, methodological): mild undercoverage of the
+primary-comparison CI at the pilot's actual N=40 design point.** At the
+true-null config (acc_a=acc_b=0.55) coverage is fine (95.93%, within noise
+of nominal). But at every non-null config tried — which is the regime the
+PASS/AMBIGUOUS call in `evaluate()` (`pass_primary = lo > 0`) actually
+operates in, since the whole point is detecting a positive delta —
+coverage runs ~93.5-93.9%, about 1.1-1.5 points below nominal 95%. With
+1,500 sims the Monte-Carlo SE on a coverage estimate near 95% is ~0.56pp,
+so the 93.47% and 93.53% rows sit roughly 2.6-2.7 SE below nominal — a
+real, if small, effect, not sampling noise on my end. This is the known
+finite-sample anti-conservatism of the plain percentile bootstrap for
+paired binary/proportion data at small N (BCa or a paired permutation test
+would likely close most of the gap), and it cuts in the direction that
+matters for this design: **a `lo > 0` PASS call at N=40 is slightly more
+likely to fire on noise than the nominal 5% one-sided rate implies** —
+call it a true single-comparison false-PASS rate closer to ~6.3-6.5%
+rather than 5% at the accuracy levels closest to the actual GSM8K/HumanEval
+operating point (which is why the 0.70/0.55 and 0.90/0.80 rows, not just
+the null row, are the load-bearing ones here).
+
+**Scope and what would sharpen this further:** only 4 of 6 planned configs
+finished inside this fire's time budget (n=80 and n=20 edge cases were cut
+short, process killed cleanly, no corrupted output) — the n=40 result is
+the one that matters since it matches the actual pre-registered design,
+so not treating the missing rows as blocking. This is also a coverage
+check on i.i.d. synthetic Bernoulli data, which doesn't capture whatever
+correlation structure the two real policies' errors actually have on the
+same prompts (correlated errors, which is the realistic case since both
+policies see the same generation up to the corrector's decisions, usually
+*improves* paired-bootstrap coverage relative to the independent case
+tested here — so this simulation is if anything a pessimistic/conservative
+stress test of coverage, not an optimistic one, which strengthens rather
+than undercuts the finding).
+
+**Not PushNotification-worthy on its own:** a ~1.5pp coverage shortfall at
+the specific N=40/accuracy-delta regime tested doesn't invalidate Phase B
+pilot results outright (the effect is small, and the true operating
+characteristics of the real data could differ from this i.i.d. synthetic
+model) — it's a caveat to log for whoever writes the memo, not a stop-ship
+finding. Recommend `MEMO_V4_SKELETON.md`'s methodology paragraph note this
+as a known small-sample caveat on the primary PASS criterion, and that a
+future revision of `phase_b_evaluate.py` consider BCa or permutation-based
+CIs if the pilot's actual observed delta ends up borderline (CI lower
+bound close to zero) — precision matters most exactly there.
+
+Next Track B pass: finish the n=80/n=20 coverage configs cut short here if
+a fire has slack (not urgent — n=40 is the design point that matters); or
+pick up N+15's other still-open candidate (`dataloader.py`/`classifier.py`/
+`main.py`, never reviewed by any prior Track B fire).
