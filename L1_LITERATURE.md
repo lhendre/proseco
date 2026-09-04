@@ -416,3 +416,18 @@ Fresh independent probes:
 No new competitor, no state change that meets the notification bar. A PushNotification was already sent this fire-cycle (12:2x UTC, duration re-flag on the standing 08-29 escalation) and nothing new has emerged since — no re-notify.
 
 **Next fire on Track A:** same probe pattern (arxiv + semanticscholar direct, remasking_test HEAD diff) until either egress unblocks or the sibling routine surfaces a genuinely new competitor.
+
+---
+
+## 2026-09-04 02:2x UTC — Track A (routed here: oldest-touched of A/B/C/D, last touch 09-03 16:27 UTC vs. Track B 09-04 00:29, Track C 09-03 22:25, Track D 09-03 18:26)
+
+Fresh independent probes, not a trust-the-log pass:
+
+- **arxiv.org/list/cs.LG/recent** — live WebFetch, `EGRESS_BLOCKED`. Unchanged since 08-19 (~16.4 days blocked).
+- **api.semanticscholar.org search** — live WebFetch, `EGRESS_BLOCKED`. Unchanged.
+- **remasking_test:research-ideation** — fresh clone, HEAD still `5265a8a` (2026-09-03 13:46 UTC, the sibling's own Mode B fire closing its Gate 8 cross-check obligation for DiFFPO). No commits since — already read and folded (nothing new) by the prior 09-03 16:2x fire. Nothing to add here.
+- **Pilot data** — `s1/runs/` re-listed directly from a fresh clone: still exactly the same 16 pre-Phase-B files, newest `gsm8k_20260813_045034.jsonl`/`humaneval_20260813_045034.jsonl` (2026-08-13). No `phase_b/` dir, no `pilot.jsonl`/`v2.jsonl` anywhere in tree. ~22 days since the newest s1 run, ~6.4 days (~154h) since the 08-29 02:2x stall escalation, no state change.
+
+No new competitor, no state change anywhere. Cross-checked Track B's latest entry (fire N+15, 09-04 00:29 UTC): a scoping result, not a new finding — confirms the EC2-only reproducibility gap but doesn't change the standing blocker. No PushNotification this fire — both structural blockers (egress proxy, EC2 pilot stall) are unchanged, last re-flagged 09-03 12:2x UTC (~14h ago), nothing new meets this fire's urgency bar.
+
+**Next fire on Track A:** same three-probe pattern (arxiv + semanticscholar direct, remasking_test HEAD diff, s1/runs listing) until either egress unblocks, the sibling routine surfaces a genuinely new competitor, or pilot data lands.
