@@ -476,3 +476,18 @@ Fresh independent probes this fire, not a trust-the-log pass:
 No new competitor, no state change anywhere. Both structural blockers unchanged: egress proxy block since 08-19 (~17.5 days); EC2 Phase B pilot stall since the 08-29 02:2x escalation, now ~168h/7.0 days — a full-week milestone by the clock, but the last re-flag was only ~38h ago (09-03 12:29 UTC) and nothing new has appeared since (no invalidating audit finding, no competitor scoop, no pilot data) — per the hard-rule urgency bar (audit finding invalidates pilot / competitor is a scoop / feature idea is a breakthrough), pure duration alone does not clear it. No PushNotification this fire.
 
 **Next fire on Track A:** same three-probe pattern (arxiv + semanticscholar direct, remasking_test HEAD diff + LANDSCAPE.md spot-read, s1/runs listing) until either egress unblocks, the sibling routine surfaces a genuinely new competitor, or pilot data lands.
+
+---
+
+## 2026-09-05 10:2x UTC — Track A (routed here: oldest-touched of A/B/C/D — L1_LITERATURE.md 02:26 09-05 vs. MEMO_V4_SKELETON.md 04:26, L1_FEATURE_IDEAS.md 06:25, L1_AUDIT_FINDINGS.md 08:27)
+
+Fresh independent probes this fire, not a trust-the-log pass:
+
+- **arxiv.org/list/cs.LG/recent** — live WebFetch, `EGRESS_BLOCKED`. Unchanged since 08-19 (~17.9 days blocked).
+- **semanticscholar.org search** — live WebFetch, `EGRESS_BLOCKED`. Unchanged.
+- **remasking_test:research-ideation** — fresh clone of the branch, HEAD unchanged at `8c5420e` (2026-09-04 13:46 UTC, same commit already reconciled by the 09-05 02:2x/04:2x/06:2x fires this cycle). Re-checked `KEY_COMPETITORS` section of `LANDSCAPE.md` directly: still tops out at DiFFPO (2510.02212, added 09-02) plus the already-logged cluster (Subliminal Clocks / Ada-DLM / Optimal-Stopping / MBE / IterRef / DepCap / Dynamic-dLLM / Apple-RL / CDLM / KLASS / T2M). **No new competitor, nothing to fold.**
+- **Pilot data** — `s1/runs/` re-listed from a fresh clone: still the same 16 pre-Phase-B files, newest `gsm8k_20260813_045034.jsonl`/`humaneval_20260813_045034.jsonl` (2026-08-13). No `phase_b/` dir, no `pilot.jsonl`/`v2.jsonl` anywhere in tree. ~23.3 days since the newest s1 run, ~17.4 days since the Phase B code push (185e2ca, 08-19) described the pilot as running on EC2.
+
+No new competitor, no state change anywhere. Both structural blockers unchanged: egress proxy block since 08-19 (~17.9 days); EC2 Phase B pilot stall since the 08-29 02:2x escalation, now ~176h/7.3 days, ~46h since the single 09-03 12:2x duration re-flag. Per that re-flag's own stated non-cadence and the 09-04 18:2x fire's call (30h too soon to re-flag on pure duration alone), 46h with zero new information is still in the same "too soon" band — no PushNotification this fire.
+
+**Next fire on Track A:** same three-probe pattern (arxiv + semanticscholar direct, remasking_test HEAD diff + LANDSCAPE.md spot-read, s1/runs listing) until either egress unblocks, the sibling routine surfaces a genuinely new competitor, or pilot data lands.
