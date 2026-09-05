@@ -1773,3 +1773,105 @@ as "does the permutation p-value's significance call ever disagree with
 the bootstrap's `p_le_zero`", not another coverage sweep, since (a)/(b)
 above already establish coverage doesn't move across construction
 methods at this N).
+
+## 2026-09-05 — Track B audit (fire N+20)
+
+Routed here as oldest-touched of the four track files
+(`L1_AUDIT_FINDINGS.md` last touched 08:27 UTC vs. Track A 10:25, Track D
+12:27/12:33, Track C 14:26). Fresh independent re-check from a clean
+clone: `l1_policy.py`, `l1_training.py`, `l1_weights.json`,
+`llada/generate.py`, `PHASE_B_L1_DESIGN.md` still `185e2ca` (2026-08-19);
+`phase_b_pilot.py`/`phase_b_evaluate.py`/`PHASE_B_PREREG_2026-08-22.md`
+still `b0b1b8d` (2026-08-23) — no code diff since N+19, findings #1-15
+unchanged. `s1/runs/` still the same 16 files (newest 2026-08-13), no
+`phase_b/` dir or `v2.jsonl`/`pilot*.jsonl` anywhere — pilot data still
+hasn't landed.
+
+**Picked up N+19's open lead (b): built the paired-permutation test and
+ran it head-to-head against `phase_b_evaluate.py`'s existing
+`paired_bootstrap`, framed as a significance-call-agreement question, not
+another coverage sweep (permutation p-values don't have "coverage").**
+Implementation (`sim_permutation_vs_bootstrap.py`, not committed —
+throwaway analysis script): a sign-flip permutation test on the paired
+per-prompt outcome differences (exchange the sign of each nonzero
+`correct_A - correct_B` under H0: no systematic effect, one-sided
+p-value = `P(perm_delta >= observed | H0)`), directly comparable to
+`paired_bootstrap`'s `p_le_zero` (`P(true delta <= 0)` under the
+bootstrap). `paired_bootstrap` imported unmodified from this checkout —
+same production code as findings #15/N+19's BCa comparison. Same
+synthetic i.i.d. paired-Bernoulli generator, run at **N=40** (the pilot's
+actual pre-registered design point), 1000 sims/config, `n_boot=500`
+matching production, 2000 permutations/sim, significance threshold
+alpha=0.025 for both methods (chosen to mirror a one-sided 97.5% call):
+
+```
+config                  p_base  delta | boot_sig_rate perm_sig_rate disagree_rate  both_sig boot_only perm_only
+null_p50                  0.50   0.00 |         0.020         0.014         0.006        14         6         0
+null_p70                  0.70   0.00 |         0.020         0.012         0.008        12         8         0
+small_effect_p50          0.50   0.05 |         0.066         0.047         0.019        47        19         0
+small_effect_p70          0.70   0.05 |         0.061         0.041         0.020        41        20         0
+medium_effect_p50         0.50   0.10 |         0.136         0.086         0.050        86        50         0
+medium_effect_p70         0.70   0.10 |         0.168         0.110         0.062       108        60         2
+
+Overall disagreement rate across 6000 sims: 0.0275
+```
+
+**Result: yes, the two methods do disagree, and — new information not
+visible from the coverage sims alone — the disagreement is almost
+entirely one-directional.** Across all six configs (null and small/medium
+true effects, at two base rates), `boot_only` (bootstrap calls
+significant, permutation doesn't) outnumbers `perm_only` by 6-108 to 0-2:
+the bootstrap's `p_le_zero < 0.025` fires roughly 1.4-1.6x as often as the
+permutation test's one-sided p-value at matched alpha, and essentially
+never the other way around (2/1000 in the single largest-effect config,
+noise at that count). This sharpens finding #15 in a way the coverage
+sims didn't: #15 established *that* the percentile bootstrap is mildly
+anti-conservative on this statistic; this result establishes the
+*direction* is consistent when checked against a genuinely different
+inferential method (a permutation test has no bootstrap-resampling
+machinery in common with `paired_bootstrap` at all), not an artifact of
+how the coverage sims themselves were constructed. Practically: a policy
+comparison that the memo would call "significant" off `p_le_zero < 0.025`
+has roughly a 1-in-3 to 1-in-2 chance (`boot_only / boot_sig`, i.e.
+19/66≈29% to 60/168≈36% across the effect sizes tested) of *not* clearing
+the same bar under a permutation test at the identical alpha — worth
+knowing if `phase_b_evaluate.py`'s printed `p_le_zero` is ever read as a
+frequentist significance level rather than as what it actually is (a
+bootstrap-based posterior-ish probability statement), since the two read
+similarly in prose but aren't calibrated the same way at N=40.
+
+**Not a new numbered finding** (no bug — `paired_bootstrap` behaves
+exactly as its own docstring says; this is a characterization of a known,
+already-flagged small-N bootstrap property, now cross-checked against an
+independent method) — closes N+19's open lead (b) with a positive
+(disagreement exists) but directionally-explained result, unlike N+19's
+BCa comparison which closed its lead with a clean negative. **Not
+PushNotification-worthy:** no pilot data exists yet for this to apply to,
+the pre-registered primary analysis still uses `p_le_zero` exactly as
+designed (this doesn't invalidate that choice, it just says don't
+over-read `p_le_zero` as a classical p-value), and the underlying
+mechanism (small-N binary-outcome bootstrap anti-conservatism) has been
+on the books since finding #15.
+
+No new state elsewhere: `remasking_test:research-ideation` HEAD advanced
+since last check (`8c5420e` → `69d233d`, 2026-09-05) — read the new
+commit directly: "Mode A — clean scan, no new papers, Phase B still
+stalled", a non-actionable confirmation entry, nothing to fold into
+`L1_LITERATURE.md` or the memo. `s1/runs/` and `phase_b/`/`v2.jsonl`
+search re-confirmed empty via fresh `find`. Standing 08-29 02:2x
+escalation now ~182h/7.6d, last re-flagged 09-03 12:2x (~130h then) — no
+PushNotification this fire; this is a methodological characterization on
+already-flagged territory (finding #15's family), not a new risk to the
+pilot's headline comparison, and duration alone isn't a re-flag trigger
+per the standing policy from the 09-03/09-04 fires.
+
+Next Track B pass: with the upstream-diff, pre/post-Phase-B diff,
+BCa-vs-percentile, and permutation-vs-bootstrap leads all now closed, the
+only remaining in-scope Track B ground is `s1/analyze.py`'s finding #14
+verdict logic, which stays blocked until a live `v2.jsonl`/pilot output
+lands. If code/data are still unchanged next Track B fire, that fire
+should say so plainly (independent re-verify) rather than manufacture a
+fifth synthetic-data methodology exercise — the bootstrap-vs-alternatives
+question has now been stress-tested from three independent angles (BCa,
+n=20/40/80 sweep, permutation) with consistent conclusions, and a fourth
+would be diminishing returns, not new signal.
