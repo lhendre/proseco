@@ -1690,3 +1690,86 @@ as a comparison point against the existing percentile bootstrap (findings
 undercoverage; nobody has yet built the alternative CI to see how large
 the practical difference is on this specific paired-accuracy-delta
 statistic).
+
+## 2026-09-05 — Track B audit (fire N+19)
+
+Routed here as oldest-touched of the four track files (`L1_AUDIT_FINDINGS.md`
+last touched 00:27 UTC 09-05 vs. Track A 02:26, Track D 04:26, Track C
+06:25). Fresh independent re-check from a clean clone: `l1_policy.py`,
+`l1_training.py`, `l1_weights.json`, `llada/generate.py`,
+`PHASE_B_L1_DESIGN.md` still `185e2ca` (2026-08-19); `phase_b_pilot.py`/
+`phase_b_evaluate.py`/`PHASE_B_PREREG_2026-08-22.md` still `b0b1b8d`
+(2026-08-23) — no code diff since N+18, findings #1-15 unchanged. `s1/runs/`
+still the same 16 files (newest 2026-08-13), no `phase_b/` dir or
+`v2.jsonl`/`pilot*.jsonl` anywhere — pilot data still hasn't landed.
+
+**Picked up N+18's second open lead: built the BCa bootstrap CI as an
+actual comparison point against `phase_b_evaluate.py`'s existing percentile
+`paired_bootstrap`, rather than just describing what one would show.**
+Implementation (`bca_cmp.py`, not committed — throwaway analysis script,
+not a repo change): imports `paired_bootstrap` unmodified from this
+checkout for the percentile arm; the BCa arm reuses the identical
+bootstrap resample draws' bias-correction (z0 from the fraction of
+bootstrap deltas below the observed delta) and acceleration (jackknife
+leave-one-prompt-out skewness of the delta statistic), then maps the
+2.5/97.5 percentiles through the standard BCa-adjusted quantiles. Same
+synthetic i.i.d. paired-Bernoulli generator as findings #15's family
+(independent `correct` draws per prompt per arm at fixed accuracies), run
+at **N=40 — the pilot's actual pre-registered per-benchmark design
+point** (prior sims covered N=20/40/80 for the percentile method alone;
+this is the first fire to run a second CI method head-to-head at the
+real operating point), 1000 sims/config, `n_boot=500` matching production:
+
+```
+config        true_d  pctl_cov  pctl_w  bca_cov   bca_w
+null           0.000    94.10%   0.424   93.60%   0.424
+small          0.100    92.50%   0.422   93.40%   0.423
+med            0.150    93.30%   0.408   94.00%   0.409
+large_base     0.100    91.70%   0.299   92.00%   0.298
+```
+
+**Result: BCa and the existing percentile method are practically
+indistinguishable at the pilot's actual N=40 design point.** Coverage for
+both sits in the same 91.7-94.1% band (both mildly under nominal 95%
+consistent with finding #15's known small-sample bootstrap behavior on
+binary paired data), and mean CI width differs by at most 0.003 across
+all four configs — noise at 1000 sims (Monte-Carlo SE on a coverage
+proportion here is ~0.7-0.8pp, so neither method's coverage numbers are
+distinguishable from the other's). This answers N+18's open question
+("nobody has yet built the alternative CI to see how large the practical
+difference is") with a concrete negative result: **switching
+`phase_b_evaluate.py`'s primary CI from percentile to BCa would not
+change the memo's PASS/AMBIGUOUS calls or materially tighten the
+reported intervals** — the mild undercoverage documented in finding #15
+is a small-N-binary-outcome property of the bootstrap generally, not an
+artifact of the specific percentile construction, so it isn't fixed by
+swapping construction methods. Not a new numbered finding (no bug, no
+actionable delta) — closes N+18's second open lead.
+
+**Practical upshot for whoever finalizes the memo:** no code change is
+warranted in `phase_b_evaluate.py` on this basis. If the pre-registered
+N=40 comparison's mild anti-conservatism (finding #15) is ever judged
+worth correcting, a different fix (larger n_boot, a t-based correction,
+or simply reporting the known small-sample caveat in prose) would be
+needed — BCa specifically is not the fix, at least not at this sample
+size and effect-size range.
+
+No new state elsewhere: `remasking_test:research-ideation` HEAD
+re-confirmed unchanged at `8c5420e` (2026-09-05, same as N+19's Track A
+check) via fresh clone; `arxiv.org` re-probed directly this fire, still
+`EGRESS_BLOCKED`. Standing 08-29 02:2x escalation now ~173h/7.2d, last
+re-flagged 09-03 12:2x (~130h) — no PushNotification this fire; this is a
+negative/practical-equivalence result on already-flagged territory
+(finding #15's family), not a new risk to the pilot's headline
+comparison.
+
+Next Track B pass: with the upstream-diff, pre/post-Phase-B diff, and
+BCa-vs-percentile leads all now closed, remaining in-scope ground is (a)
+`s1/analyze.py`'s finding #14 verdict logic, still blocked on a live
+`v2.jsonl`/pilot output, or (b) a paired-permutation test as a third
+comparison point (tests H0: delta=0 rather than producing a CI directly,
+so it's a different question than coverage — worth doing only if framed
+as "does the permutation p-value's significance call ever disagree with
+the bootstrap's `p_le_zero`", not another coverage sweep, since (a)/(b)
+above already establish coverage doesn't move across construction
+methods at this N).
