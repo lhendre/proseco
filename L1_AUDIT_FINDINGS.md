@@ -1605,3 +1605,88 @@ is in either finishing methodological stress-tests of `phase_b_evaluate.py`
 not a replacement) or a fresh line-by-line diff of `llada/generate.py`'s
 `corrector_policy` branch against upstream LLaDA `generate.py` if that
 diff has never been done directly (check before assuming).
+
+## 2026-09-05 — Track B audit (fire N+18, commit 2df635a still current)
+
+Routed here as oldest-touched of the four track files
+(`L1_AUDIT_FINDINGS.md` last touched 16:29 UTC 09-04 vs. Track A 18:25,
+Track D 20:25, Track C 22:25). Re-confirmed via direct hash lookup:
+`l1_policy.py`, `l1_training.py`, `l1_weights.json`, `llada/generate.py`,
+`PHASE_B_L1_DESIGN.md` still `185e2ca` (2026-08-19); `phase_b_pilot.py`/
+`phase_b_evaluate.py`/`PHASE_B_PREREG_2026-08-22.md` still `b0b1b8d`
+(2026-08-23) — no code diff since N+17, findings #1-15 unchanged.
+`s1/runs/` still the same 16 files (newest 2026-08-13), no `phase_b/` dir
+or `v2.jsonl`/`pilot*.jsonl` anywhere — pilot data still hasn't landed.
+
+**Picked up N+17's open lead: did the line-by-line diff of
+`llada/generate.py`'s `corrector_policy` addition, but against the right
+baseline.** N+17 suggested diffing against *upstream* LLaDA `generate.py`.
+Tried that first — `raw.githubusercontent.com` was actually reachable
+this fire (unlike `arxiv.org`, which is still `EGRESS_BLOCKED`; worth
+noting for Track A: the block is host-specific, not blanket), and the
+fetched upstream logic (Gumbel-noise proposal, float64 `low_confidence`
+softmax gather, per-row top-k via `num_transfer_tokens`) matches this
+repo's `get_transfer_index`/`get_num_transfer_tokens` structurally. But
+upstream LLaDA has no corrector concept at all — the corrector loop is a
+ProSeCo-original addition, so "diff the corrector_policy branch against
+upstream" doesn't have a coherent target; any delta would just be
+ProSeCo's pre-existing design, not something Phase B introduced. Redirected
+to the diff that actually tests Phase B's own claim: this repo's docstring
+(`llada/generate.py` lines 107-108) asserts "Everything else in this
+function is byte-identical to the original ProSeCo generate()" — i.e. the
+Phase B commit should touch *only* the `corrector_policy`/`phase_b_features`
+machinery and nothing in the base predictor/corrector mechanics. That's a
+checkable claim: `git diff 787b646 185e2ca -- llada/generate.py` (787b646 =
+last commit before Phase B, s1 instrumentation only; 185e2ca = current).
+
+**Result: the claim holds.** The full diff is additive-only: the new
+`corrector_policy` parameter/docstring, the `if corrector_policy is
+None: ... else: ...` branch replacing the old unconditional
+`(step + 1) % apply_corrector_every_n_steps == 0` (which survives verbatim
+inside the `None` branch), and s1-logging refactors (`s1_log.append({...})`
+→ build `rec` dict, `update()` with predictor-confidence stats) that are
+themselves pre-existing s1 v2 additions untouched by Phase B, not new in
+this diff. No line in `get_transfer_index`, `get_num_transfer_tokens`, the
+EOS-stopping check, or the NFE bookkeeping changed. This directly confirms
+something findings #1-15 had assumed but never verified textually: the
+`fixed` arm's generation is byte-for-byte the pre-Phase-B code path (modulo
+the dead `phase_b_features = None` assignment, which has no runtime
+effect), so `fixed` is a faithful, unregressed control — not, e.g.,
+accidentally sharing a mutated NFE counter or a subtly different transfer-
+index calculation with the adaptive arms. Not a new numbered finding (no
+bug found) — closing out N+17's open lead with a documented negative
+result so a future fire doesn't re-attempt the upstream-diff framing,
+which is the wrong comparison to make.
+
+**One thing this diff sharpens (not new — restates finding #8's mechanism
+more precisely):** for the adaptive arms, `phase_b_features` is computed
+unconditionally every predictor step (before `should_invoke` is even
+called), while for `fixed` it's skipped entirely (`phase_b_features = None`
+inline, never calling `features_from_predictor_logits`). This has no
+accuracy or NFE effect (feature computation doesn't touch `x`, `logits`
+used for generation, or any counter) but is worth noting explicitly for
+whoever eventually profiles Phase B wall-clock: `cadllm_linear`/`l1_mlp`
+pay one extra softmax+entropy pass over the active region on every step,
+`fixed` does not, so a wall-clock-based cost comparison (as opposed to the
+pre-registered NFE-based one) would be mildly unfair to the adaptive arms.
+The pilot's own metric is NFE (`total_nfe`), not wall time, so this
+doesn't affect the pre-registered comparison — flagging only in case
+`phase_b_evaluate.py` or the memo ever reports `wall_s` (which `run_one`
+does log) as a secondary metric.
+
+No new state elsewhere: `remasking_test:research-ideation` HEAD checked
+via `git ls-remote`, unchanged since 09-03 13:46 UTC. Standing 08-29 02:2x
+escalation now ~171h/7.1d, last re-flagged 09-03 12:2x (~130h) — no
+PushNotification this fire; this is a confirmatory/negative-result finding
+on already-flagged territory (finding #8's mechanism), not a new risk to
+the pilot's headline comparison.
+
+Next Track B pass: with the upstream-diff and pre/post-Phase-B-diff leads
+both closed, remaining in-scope ground is either (a) `s1/analyze.py`'s
+finding #14 verdict logic, still blocked on a live `v2.jsonl`, or (b) an
+actual BCa/paired-permutation CI implementation in `phase_b_evaluate.py`
+as a comparison point against the existing percentile bootstrap (findings
+#15 and its n=80/n=20 extension already show the *direction* of percentile
+undercoverage; nobody has yet built the alternative CI to see how large
+the practical difference is on this specific paired-accuracy-delta
+statistic).
