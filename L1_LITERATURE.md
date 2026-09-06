@@ -503,3 +503,59 @@ Probes this fire:
 - **Pilot data** — `s1/runs/` re-listed from a fresh clone: still the same 16 pre-Phase-B files, newest `gsm8k_20260813_045034.jsonl`/`humaneval_20260813_045034.jsonl` (2026-08-13). No `phase_b/` dir, no `pilot.jsonl`/`v2.jsonl` anywhere in tree. ~23.5 days since the newest s1 run, ~7.7 days (~184h) since the 08-29 escalation, ~54h since the single 09-03 12:29 duration re-flag — still short of the established multi-day (~4.4 day) re-flag cadence, and nothing new (no invalidating audit finding, no competitor scoop, no pilot data) meets the hard-rule urgency bar. No PushNotification this fire.
 
 **Next fire on Track A: switch the probe from `WebFetch` to `WebSearch`** (2-3 queries, mechanism/author/venue phrasing per the sibling routine's pattern) — stop spending budget on the confirmed-dead `WebFetch` path to arxiv/ar5iv/semanticscholar. Keep the `remasking_test` HEAD diff + `LANDSCAPE.md` cross-check and the `s1/runs` pilot-data listing as before.
+
+## 2026-09-06 02:2x UTC — Track A fire N+22: BlockPilot surfaced, not a scoop; pilot still unlanded
+
+Routed here as oldest-touched track file (Track A's e82959c at 18:26 UTC
+09-05 vs. Track D 20:27, Track C 22:26, Track B 00:27 09-06 — all newer).
+
+**WebSearch queries this fire** (two phrasings not tried by any prior Track A
+entry): "diffusion language model corrector sub-loop post-hoc token
+correction policy 2026" and "per-block confidence policy discrete diffusion
+decoding arxiv 2026". Both returned live, dated 2026 results (WebSearch
+channel confirmed still working, per N+21's discovery — did not re-attempt
+direct `WebFetch` to arxiv.org/semanticscholar.org this fire since that path
+was independently reconfirmed EGRESS_BLOCKED as recently as pass 20).
+
+Candidates surfaced: Revise-Don't-Freeze self-correcting MDLM (2606.01026),
+Corrective Diffusion Language Models (2512.15596), Generalized Discrete
+Diffusion with Self-Correction (2603.02230), Finish-First-Perfect-Later
+token-level cross-validation (2510.05090), Confidence-Based Decoding
+efficiency proof (2603.22248), When-to-Commit variable-size blocks
+(2604.23994), Progress-Aware Confidence Schedules (2512.02892),
+Training-Free Confidence-Aware Calibration (2512.07173), and **BlockPilot:
+Instance-Adaptive Policy Learning for Diffusion-based Speculative Decoding
+(2606.31315)**.
+
+Cross-checked all nine arxiv IDs against a fresh `remasking_test:research-ideation`
+clone's `LANDSCAPE.md` (HEAD `69d233d`, unchanged from N+21's check). Eight
+of nine are already tracked there. **BlockPilot (2606.31315) is the one
+genuinely new ID** — not present in `LANDSCAPE.md` or this file. Read its
+abstract in full via WebSearch before treating it as a lead: it predicts an
+optimal *block size* once, from the prefilling representation, for
+diffusion-based speculative decoding (draft/verify against a target model,
+Alibaba AMAP team, 4.2x speedup on Qwen3-4B) — a one-shot per-instance
+sizing decision, not a per-step or per-token confidence policy, and no
+remasking or corrector-loop concept at all. Same standing differentiation as
+every other main-loop/decoding-efficiency competitor already logged: nothing
+analogous to a corrector-loop-entry decision on an already-decoded block.
+**Not a scoop, not L1-adjacent enough to add to L1's own Gate-8 list** —
+closer to DepCap's block-wise-parallelism family than to any confidence-policy
+competitor. Logged here for the record; not pushed into `remasking_test`
+(out of this routine's repo/branch scope per hard rule 2 — that repo is the
+sibling routine's to update).
+
+**Pilot data**: `s1/runs/` re-listed fresh — still the same 16 pre-Phase-B
+files, newest `gsm8k_20260813_045034.jsonl`/`humaneval_20260813_045034.jsonl`
+(2026-08-13). No `phase_b/` dir, no `pilot*.jsonl`/`v2.jsonl` anywhere in
+tree. ~18.4 days since the Phase B code push (185e2ca, 2026-08-19), ~7.9
+days (~190h) since the 08-29 02:2x escalation, ~62h since the single 09-03
+12:2x duration re-flag — still short of the ~4.4-day re-flag cadence held
+since that re-flag, and no new finding (no scoop, no invalidating audit
+result, no pilot data) meets the hard-rule urgency bar. **No PushNotification
+this fire.**
+
+Next fire on Track A: rotate query phrasing again (avoid repeating
+"corrector sub-loop", "per-block confidence policy", or N+21's two queries
+verbatim); keep the `LANDSCAPE.md` HEAD diff + arxiv-ID cross-check and the
+`s1/runs` pilot-data listing as the standing per-fire checks.
