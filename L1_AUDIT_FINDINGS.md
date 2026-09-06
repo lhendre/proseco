@@ -1935,3 +1935,52 @@ inventing a sixth synthetic-data exercise on top of BCa/permutation/n-sweep
 — those three already gave consistent, closed-out answers. Next fire:
 whichever of A/C/D is oldest-touched at that time (Track A, 18:26 09-05,
 is oldest right now).
+
+---
+
+## 2026-09-06 — Track B audit (fire N+22)
+
+Routed here as oldest-touched of the four track files: `L1_AUDIT_FINDINGS.md`
+last touched 00:27:58 UTC 09-06 (fire N+21) vs. Track A 02:26:15, Track D
+04:26:15, Track C 08:26:51, all 09-06.
+
+Independent re-verify from a fresh clone (not trusting prior fires' hash
+claims): `l1_policy.py`, `l1_training.py`, `l1_weights.json`,
+`llada/generate.py`, `PHASE_B_L1_DESIGN.md` all still last-touched by
+`185e2ca` (2026-08-19); `phase_b_pilot.py`/`phase_b_evaluate.py` still
+`b0b1b8d` (2026-08-23); `PHASE_B_PREREG_2026-08-22.md` still `a796b4f`
+(2026-08-23) — no code diff since N+21, findings #1–#15 all still apply
+exactly as written (fixed: #1, #2; open: #3–#15). `s1/runs/` re-listed
+directly: still the same 16 files (15 non-empty-or-gitkeep + `.gitkeep`),
+newest `gsm8k_20260813_045034.jsonl`/`humaneval_20260813_045034.jsonl`
+(2026-08-13); fresh `find . -iname '*pilot*.jsonl' -o -iname 'v2.jsonl' -o
+-type d -iname '*phase_b*'` returned nothing — pilot data still hasn't
+landed, ~24.7 days after the newest S1 run / ~18.4 days after the Phase B
+code push.
+
+`remasking_test:research-ideation` HEAD re-fetched fresh via a clean
+clone: still `69d233d` (2026-09-05, "Mode A — clean scan, no new papers,
+Phase B still stalled"), unchanged since N+21's check — nothing to fold
+into `L1_LITERATURE.md` or the memo.
+
+**No new finding.** As N+21 already concluded, the four independently-run
+methodology checks against `phase_b_evaluate.py`'s `paired_bootstrap`
+(coverage sweep, BCa comparison, n=20/40/80 sweep, permutation-vs-bootstrap
+agreement) and the full-tree `corrector_policy`/`l1_policy`/`L1_` grep have
+exhausted the static-analysis ground reachable without live pilot data;
+the only remaining open Track B item (finding #14's verdict-logic check)
+stays blocked on a real `v2.jsonl`/`pilot.jsonl`. This fire took N+21's own
+recommendation and did the plain re-verify rather than manufacture a sixth
+synthetic-data exercise.
+
+Standing 08-29 ~02:2x escalation now ~200h/8.3d old; last re-flagged
+09-03 ~12:2x (~70h/2.9d ago), short of the ~4.4-day incremental cadence
+every fire since that re-flag has held to — this pass stands down too.
+**No PushNotification this fire**: no new finding, no pilot data to apply
+finding #14 to, and the escalation isn't due for its next re-flag.
+
+Next Track B pass: if code/data are still unchanged, keep to the plain
+independent re-verify (hashes, pilot-data search, sibling-repo HEAD) —
+there is no untried static-analysis angle left against this unchanged
+code. Next fire: whichever of A/C/D is oldest-touched at that time (Track
+A, 02:26 09-06, is oldest right now).
