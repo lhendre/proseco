@@ -1875,3 +1875,63 @@ fifth synthetic-data methodology exercise — the bootstrap-vs-alternatives
 question has now been stress-tested from three independent angles (BCa,
 n=20/40/80 sweep, permutation) with consistent conclusions, and a fourth
 would be diminishing returns, not new signal.
+
+---
+
+## 2026-09-06 — Track B audit (fire N+21)
+
+Routed here as oldest-touched of the four track files (`L1_AUDIT_FINDINGS.md`
+last touched 16:29 UTC 09-05 vs. Track A 18:26, Track D 20:27, Track C
+22:26, all 09-05). Fresh independent re-check from the actual checkout
+(not trusting prior fires' hash claims): `l1_policy.py`, `l1_training.py`,
+`l1_weights.json`, `llada/generate.py`, `PHASE_B_L1_DESIGN.md` all still
+`185e2ca` (2026-08-19); `phase_b_pilot.py`/`phase_b_evaluate.py` still
+`b0b1b8d` (2026-08-23); `PHASE_B_PREREG_2026-08-22.md` still `a796b4f`
+(2026-08-23) — no code diff since N+20, findings #1-15 all still apply as
+written. `s1/runs/` re-listed directly: still the same 16 files, newest
+`gsm8k_20260813_045034.jsonl`/`humaneval_20260813_045034.jsonl`
+(2026-08-13); `find . -iname '*pilot*.jsonl' -o -iname 'v2.jsonl'` and
+`find . -type d -iname '*phase_b*'` both empty — pilot data still hasn't
+landed, ~24.6 days after the newest S1 run / ~18.3 days after the Phase B
+code push.
+
+Per N+20's own recommendation, took this as the "say so plainly" fire
+rather than force a fifth synthetic-data exercise — but did spend the
+budget on a real (if ultimately negative) new-angle check before writing
+that down: read `phase_b_evaluate.py`'s `load()` rescore path end to end
+looking for anything beyond finding #5's already-documented
+`except (AssertionError, Exception): pass` silent-no-op risk (e.g.
+whether the hardcoded `load_benchmark(bench, 200, ...)` sample cap could
+itself under-cover a larger pilot and cause a *partial*, harder-to-notice
+rescore rather than the all-or-nothing failure #5 describes). Result:
+that's the same failure shape finding #5 already names — its own
+recommendation text explicitly covers "covers only a subset of the ids
+seen in `rows`" and proposes the `{n_missing}/{len(rows)}` warning for
+exactly this case — so no new finding, just confirmation that #5's scope
+already subsumes it. Also swept `grep -rl "corrector_policy\|l1_policy\|L1_" --include="*.py" .`
+across the full tree to check no Phase-B-relevant file has been missed by
+any prior pass: only the same four files (`l1_policy.py`,
+`l1_training.py`, `phase_b_pilot.py`, `phase_b_evaluate.py`, plus
+`llada/generate.py` via `corrector_policy`) come back, matching every
+prior fire's scope — `dataloader.py`/`classifier.py`/`main.py` confirmed
+still correctly out of scope (per N+17/N+18's ruling).
+
+**No new finding.** `remasking_test:research-ideation` HEAD re-fetched
+fresh: still `69d233d` (2026-09-05), unchanged since Track A/C/D's checks
+earlier this cycle — nothing to fold. Standing 08-29 02:2x escalation now
+~190h/7.9d, last re-flagged 09-03 12:2x (~60h/2.5d ago) — well short of
+the ~4.4-day incremental cadence every fire since that re-flag has held
+to, so this pass stands down too; no new finding and no pilot data to
+apply one to regardless. No PushNotification this fire.
+
+Next Track B pass: with #5's scope now confirmed to already cover the
+sample-cap sub-case and the full-tree file sweep confirming no missed
+Phase-B-relevant module, there is no untried static-analysis angle left
+against this unchanged code — the only open Track B item is finding #14's
+verdict-logic check, still blocked on a live `v2.jsonl`. If code/data are
+still unchanged, keep doing the plain independent re-verify (confirm
+hashes, confirm no pilot data, confirm sibling-repo HEAD) rather than
+inventing a sixth synthetic-data exercise on top of BCa/permutation/n-sweep
+— those three already gave consistent, closed-out answers. Next fire:
+whichever of A/C/D is oldest-touched at that time (Track A, 18:26 09-05,
+is oldest right now).
