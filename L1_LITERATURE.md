@@ -612,3 +612,59 @@ arxiv-ID cross-check and the `s1/runs` pilot-data listing as the standing
 per-fire checks. If `s1/runs` or `s1/phase_b` still shows nothing new by the
 ~105.6h reflag mark (roughly 2026-09-07 ~19:00 UTC), the next fire to reach
 that point should re-flag pilot duration once more per the standing cadence.
+
+## 2026-09-06 22:2x UTC — Track A fire N+24: DiSPO surfaced (new-to-corpus, not L1-adjacent), no scoop
+
+Routed here as oldest-touched track file (Track A's c99b67a at 12:26 UTC
+09-06 — Track D 14:26, Track C 16:26, Track B 20:25 all newer; Track B's
+20:25 fire was itself a re-verify pass, not new state).
+
+**WebSearch query this fire** (new phrasing, avoiding N+22/N+23's exact
+strings): "arxiv 2026 policy network decides when to invoke correction step
+diffusion language model decoding". Surfaced nine hits: Progressive
+Refinement Regulation (2603.04514), Progress-Aware Confidence Schedules
+(2512.02892), TraceLock/"The Path Matters" (2605.24697), an ICLR 2026 DeLTa
+Workshop paper, TACG (2607.03236), Learning Unmasking Policies/"Apple RL"
+(2512.09106), Corrective Diffusion Language Models (2512.15596), and
+**Diffusion-State Policy Optimization / DiSPO (2602.06462)**.
+
+Grep-checked all against the fresh `remasking_test:research-ideation`
+`LANDSCAPE.md` (HEAD unchanged at `dc5b91a`, confirmed no-op per Track B's
+last fire) and this file's own history: seven of nine already tracked
+(2603.04514 flagged HIGH-PRIORITY-unread by the sibling routine since
+08-13; the rest logged across N+21-N+23 or earlier). **DiSPO (2602.06462)
+is the one genuinely new-to-corpus ID** — zero hits in `LANDSCAPE.md` or
+this file. Read its abstract via WebSearch before filing (Oba/Furuta/
+Okazaki, Feb 2026): it's a plug-in credit-assignment layer for RL
+fine-tuning masked diffusion LMs — branches at intermediate masked states,
+resamples fillings from cached rollout logits, and updates only the
+newly-filled tokens without extra diffusion rollouts, tested on LLaDA-8B-
+Instruct against a diffu-GRPO baseline (Kuleshov-adjacent training
+infrastructure, not a Kuleshov-group paper itself). This is a **training-
+time RL credit-assignment method for the base denoiser**, not an inference-
+time policy over whether to invoke a separate corrector step — no
+corrector-sub-loop concept, no remasking/un-commit mechanism, nothing
+analogous to a post-hoc correction pass. Same standing differentiation as
+every RL-policy competitor already logged (DiFFPO, Apple RL): governs how
+the base model is trained/how it fills masks, not whether a corrector runs
+on an already-decoded block. **Not a scoop, not L1-Gate-8 material** —
+logged here for the record only, not pushed to `remasking_test` (out of
+this routine's repo/branch scope per hard rule 2).
+
+**Pilot data**: `s1/runs/` re-listed fresh via direct GitHub API — still
+the same 16 pre-Phase-B files, newest `gsm8k_20260813_045034.jsonl`/
+`humaneval_20260813_045034.jsonl` (2026-08-13). No `phase_b/` dir, no
+`pilot*.jsonl` anywhere in tree. ~18.7 days since the Phase B code push
+(185e2ca, 2026-08-19), ~8.8 days (~212h) since the 08-29 02:2x escalation,
+~82h since the 09-03 12:2x re-flag — still under the ~105.6h re-flag
+cadence, and per Track B N+23's own note the next re-flag isn't due until
+~2026-09-07 21:00 UTC. No scoop, no invalidating audit result, no pilot
+data this fire — none of the three hard-rule urgency conditions are met.
+**No PushNotification this fire.**
+
+Next fire on Track A: rotate query phrasing again (avoid this fire's exact
+string and N+22/N+23's phrasings); keep the `LANDSCAPE.md` HEAD diff +
+arxiv-ID cross-check and the `s1/runs` pilot-data listing as the standing
+per-fire checks. The ~105.6h re-flag mark lands ~2026-09-07 21:00 UTC per
+N+23/Track B's math — whichever fire crosses that line next should re-flag
+pilot duration once more per the standing cadence.
