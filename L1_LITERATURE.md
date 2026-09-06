@@ -559,3 +559,56 @@ Next fire on Track A: rotate query phrasing again (avoid repeating
 "corrector sub-loop", "per-block confidence policy", or N+21's two queries
 verbatim); keep the `LANDSCAPE.md` HEAD diff + arxiv-ID cross-check and the
 `s1/runs` pilot-data listing as the standing per-fire checks.
+
+## 2026-09-06 12:2x UTC — Track A fire N+23: two LANDSCAPE-known IDs cross-logged, no scoop
+
+Routed here as oldest-touched track file (Track A's cd534ab at 02:26 UTC
+09-06 vs. Track D 04:26, Track C 08:26, Track B 10:25 — all newer).
+
+**WebFetch re-check**: direct fetch to `arxiv.org/list/cs.LG/recent` still
+returns `EGRESS_BLOCKED` — confirms the wall is unchanged since pass 20,
+~17 days running now. WebSearch remains the only working channel (per N+21).
+
+**WebSearch query this fire** (new phrasing): "arxiv 2026 learned per-token
+confidence policy corrector masked diffusion language model remasking".
+Surfaced four IDs: Re-evaluating Confidence Remasking in MDLM (2606.12232),
+Learning Unmasking Policies for Diffusion Language Models (2512.09106) —
+both already present in this file from earlier fires — plus two not yet
+cross-logged here: **Learn from Your Mistakes: Self-Correcting Masked
+Diffusion Models** (2602.11590) and **Remask, Don't Replace: Token-to-Mask
+Refinement in Masked Diffusion Language Models** (2604.18738, code at
+`github.com/synsis/remasked_DLM`).
+
+Checked both of the new IDs against `remasking_test:research-ideation`
+(fresh clone, HEAD still `69d233d`, unchanged since N+18): both already
+tracked in `LANDSCAPE.md` (lines 64 and 27) and already have `IDEAS.md`
+entries (lines 6 and 22) — not new to the broader research corpus, just not
+previously named in this file. Read both abstracts via WebSearch before
+filing: 2602.11590 trains a model to *identify and revise its own errors*
+(a training-time self-correction objective on the base model); 2604.18738
+changes the *correction mechanism* itself (remask-to-mask-token instead of
+replace-with-new-token during refinement). Neither proposes or evaluates a
+learned invocation policy for a separate corrector sub-loop — both are
+mechanism/training papers, not policy-over-when-to-invoke papers, so neither
+changes L1's differentiation (a lightweight classifier deciding *whether to
+run* the corrector step, trained on multi-confidence features, orthogonal to
+what the corrector mechanism does once invoked). **Not a scoop, not L1-Gate-8
+material** — logged here only so future Track A fires don't re-surface them
+as "new."
+
+**Pilot data**: `s1/runs/` re-listed fresh — still the same 16 pre-Phase-B
+files, newest `gsm8k_20260813_045034.jsonl`/`humaneval_20260813_045034.jsonl`
+(2026-08-13). No `phase_b/` dir, no `pilot*.jsonl` anywhere in tree. ~18.5
+days since the Phase B code push (185e2ca, 2026-08-19), ~8.4 days (~202h)
+since the 08-29 02:2x escalation, ~72h since the 09-03 12:2x re-flag — still
+under the ~4.4-day (105.6h) re-flag cadence held since that re-flag. No
+scoop, no invalidating audit result, no pilot data this fire — none of the
+three urgency conditions in the hard rules are met. **No PushNotification
+this fire.**
+
+Next fire on Track A: rotate query phrasing again (avoid this fire's exact
+string and N+21/N+22's phrasings); keep the `LANDSCAPE.md` HEAD diff +
+arxiv-ID cross-check and the `s1/runs` pilot-data listing as the standing
+per-fire checks. If `s1/runs` or `s1/phase_b` still shows nothing new by the
+~105.6h reflag mark (roughly 2026-09-07 ~19:00 UTC), the next fire to reach
+that point should re-flag pilot duration once more per the standing cadence.
