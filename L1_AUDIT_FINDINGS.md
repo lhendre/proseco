@@ -1984,3 +1984,64 @@ independent re-verify (hashes, pilot-data search, sibling-repo HEAD) —
 there is no untried static-analysis angle left against this unchanged
 code. Next fire: whichever of A/C/D is oldest-touched at that time (Track
 A, 02:26 09-06, is oldest right now).
+
+---
+
+## 2026-09-06 — Track B audit (fire N+23)
+
+Routed here as oldest-touched of the four track files: `L1_AUDIT_FINDINGS.md`
+last touched 10:25:24 UTC 09-06 (fire N+22) vs. Track A 12:26:15, Track D
+14:26:45, Track C 16:26:20, all 09-06.
+
+Independent re-verify from a fresh clone (not trusting prior fires' hash
+claims): `l1_policy.py`, `l1_training.py`, `l1_weights.json`,
+`llada/generate.py`, `PHASE_B_L1_DESIGN.md` all still last-touched by
+`185e2ca` (2026-08-19); `phase_b_pilot.py`/`phase_b_evaluate.py` still
+`b0b1b8d` (2026-08-23); `PHASE_B_PREREG_2026-08-22.md` still `a796b4f`
+(2026-08-23) — no code diff since N+22, findings #1–#15 all still apply
+exactly as written (fixed: #1, #2; open: #3–#15). `s1/runs/` re-listed
+directly: still the same 16 files (15 non-empty-or-gitkeep + `.gitkeep`),
+newest `gsm8k_20260813_045034.jsonl`/`humaneval_20260813_045034.jsonl`
+(2026-08-13); fresh `find . -iname '*pilot*.jsonl' -o -iname 'v2.jsonl' -o
+-type d -iname '*phase_b*'` returned nothing — pilot data still hasn't
+landed, ~25.0 days after the newest S1 run / ~18.5 days after the Phase B
+code push.
+
+Before writing this down as a plain re-verify, re-read `generate.py`'s
+predictor/corrector loop (lines 162-373) end to end against the
+matched-FLOPs assumption `phase_b_evaluate.py`'s `total_nfe` comparison
+rests on: both the predictor call (`model(x)`) and each corrector call
+(`model(corrector_x)`) forward-pass the *full* `prompt_len + gen_length`
+tensor regardless of `block_idx`, even though the corrector's active
+region (`active_region_start=prompt_len` to `block_end`) grows as later
+blocks are reached. So a corrector NFE at block 0 and one at block 31 cost
+the same wall-clock/FLOPs (same tensor shape into the model), which is the
+implicit assumption behind counting all NFEs as fungible units — confirmed
+true by inspection, not merely assumed. No bug, not a new finding, just
+closes off an angle N+21's file-sweep didn't explicitly narrate.
+
+`remasking_test:research-ideation` HEAD re-fetched fresh via a clean
+clone: now `dc5b91a` (2026-09-06, "Mode F — fresh-paper sweep clean, Phase
+B still stalled"), advanced from N+22's `69d233d` but — per Track D's
+independent check earlier this cycle — a zero-new-papers no-op; nothing
+to fold into `L1_LITERATURE.md` or the memo.
+
+**No new finding.** Static-analysis ground against this unchanged code
+remains exhausted (per N+21/N+22): the four synthetic-data methodology
+checks on `paired_bootstrap`, the full-tree `corrector_policy`/`l1_policy`/
+`L1_` grep, and now the matched-FLOPs tensor-shape sanity check above cover
+everything reachable without a live `v2.jsonl`/`pilot.jsonl`. The only
+remaining open Track B item (finding #14's verdict-logic check) stays
+blocked on real pilot output.
+
+Standing 08-29 ~02:2x escalation now ~208h/8.7d old; last re-flagged 09-03
+~12:2x (~80h/3.3d ago), still short of the ~4.4-day incremental cadence
+every fire since that re-flag has held to — this pass stands down too.
+**No PushNotification this fire**: no new finding, no pilot data to apply
+finding #14 to, and the escalation isn't due for its next re-flag (next
+due ~09-07 ~21:00 UTC by that cadence).
+
+Next Track B pass: if code/data are still unchanged, keep to the plain
+independent re-verify (hashes, pilot-data search, sibling-repo HEAD).
+Next fire: whichever of A/C/D is oldest-touched at that time (Track A,
+12:26 09-06, is oldest right now).
