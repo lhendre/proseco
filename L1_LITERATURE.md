@@ -668,3 +668,47 @@ arxiv-ID cross-check and the `s1/runs` pilot-data listing as the standing
 per-fire checks. The ~105.6h re-flag mark lands ~2026-09-07 21:00 UTC per
 N+23/Track B's math — whichever fire crosses that line next should re-flag
 pilot duration once more per the standing cadence.
+
+## 2026-09-07 06:2x UTC — Track A fire N+25
+
+Chosen this fire because `L1_LITERATURE.md` was the least-recently-touched
+of the four track files (last write 2026-09-06 22:28 UTC, vs. D 00:25,
+C 02:25, B 04:26 on 09-07 — all UTC).
+
+**WebFetch direct to `arxiv.org/list/cs.LG/recent`**: `EGRESS_BLOCKED`
+again, unchanged from every prior fire since the proxy allowlist gap was
+first found. **WebSearch bypass**: still live. One rotated query ("2026
+discrete diffusion language model inference-time corrector policy
+confidence-based remasking", new phrasing vs. N+22-N+24) surfaced ReMDM
+(2503.00307, already the base mechanism this whole cluster sits on),
+"Re-evaluating Confidence Remasking" (2606.12232, already logged),
+Targeted Remasking (2605.26436, already logged), a sampler-evaluation
+paper (2602.19619, already logged as BG), and **LeADS** — a learned
+remasking-scheduler framework described in the snippet as replacing
+"fixed or heuristic schedules such as confidence-based approaches."
+Grep-checked both this file and a fresh `remasking_test:research-ideation`
+clone (HEAD `dc5b91a`, unchanged since Track B's last fire — no-op):
+**LeADS is already logged** in `LANDSCAPE.md` line 980 (OpenReview
+`opU07mmD9K`, Stanford CS224R course project, ~March 2026, BG-flagged —
+not Kuleshov-affiliated, not peer-reviewed) and cross-referenced again at
+line 1425. **2606.12232 is already logged** in this file (line 574) and
+in `LANDSCAPE.md`. **No new arxiv ID, no scoop.**
+
+**Pilot data**: `s1/runs/` re-listed fresh from a clean clone — still the
+same 16 pre-Phase-B files, newest `gsm8k_20260813_045034.jsonl` /
+`humaneval_20260813_045034.jsonl` (2026-08-13). No `phase_b/` dir, no
+`v2.jsonl`/`pilot*.jsonl` anywhere in the tree. ~19.1 days since the
+Phase B code push (185e2ca, 2026-08-19), ~9.6 days (~230h) since the
+08-29 02:2x escalation, ~91.5h since the 09-03 12:2x re-flag — still
+under the ~105.6h re-flag cadence. Per N+23/Track B's math the next
+re-flag isn't due until ~2026-09-07 21:00 UTC (~14.5h from this fire's
+start); this fire is not the one that crosses that line. No scoop, no
+invalidating audit result, no pilot data landed this fire — none of the
+three hard-rule urgency conditions are met. **No PushNotification this
+fire.**
+
+Next fire on Track A: rotate query phrasing again; keep the
+`LANDSCAPE.md` HEAD diff + arxiv-ID cross-check and the `s1/runs`
+pilot-data listing as the standing per-fire checks. Whichever fire is
+active at/after ~2026-09-07 21:00 UTC should re-flag pilot duration once
+more per the standing cadence, regardless of which track it's assigned.
