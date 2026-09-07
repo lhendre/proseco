@@ -2145,3 +2145,54 @@ that pass owes the next re-flag PushNotification per the cadence
 established since 08-29.
 Next fire: whichever of A/C/D is oldest-touched at that time (Track A,
 06:27 09-07, is oldest right now).
+
+---
+
+## 2026-09-07 — Track B audit fire N+26: independent re-verify, no new state
+
+Picked per the oldest-touched rule (Track B last touched 09-07 12:26:43,
+older than Track A 14:26:34, Track D 16:25:44, and Track C 20:29:16 the
+same cycle).
+
+Re-hashed the Phase B surface directly against `s1-instrumentation` HEAD
+(`3160464`): `l1_policy.py`, `l1_training.py`, `l1_weights.json`,
+`PHASE_B_L1_DESIGN.md`, and `llada/generate.py` are all still
+last-changed by `185e2ca` (2026-08-19); `phase_b_pilot.py` /
+`phase_b_evaluate.py` are still `b0b1b8d` (2026-08-23). No code diff
+since N+25 — findings #1–#14 stand exactly as written (fixed: #1, #2;
+open: #3–#14).
+
+Read `l1_policy.py` in full again with fresh eyes rather than trusting
+the standing "exhausted" verdict blind: re-derived the `load_policy`
+`l1_mlp:PATH:THRESH` ambiguity independently before checking it was
+already N+10's filed non-finding (line ~1131) — same conclusion, no
+realistic path in this repo contains a bare-float-shaped `:` segment, so
+still not worth filing. Nothing else in the file reads differently on a
+second pass.
+
+`s1/runs/` re-listed directly: still the same 16 entries, newest
+`gsm8k_20260813_045034.jsonl` / `humaneval_20260813_045034.jsonl`
+(2026-08-13). A fresh `find . -iname '*pilot*.jsonl' -o -iname
+'v2.jsonl' -o -type d -iname '*phase_b*'` returned nothing but the design
+docs and pilot scripts themselves — pilot data still hasn't landed, ~19.9
+days after the Phase B code push (`185e2ca`, 2026-08-19).
+
+`remasking_test:research-ideation` HEAD re-checked via `git ls-remote`:
+still `f2217c3`, unchanged since Track D pass 26's fold — nothing new.
+
+**No new finding.** Static-analysis ground against this unchanged code
+remains exhausted per N+21 through N+25. The open items that depend on
+real pilot output (finding #14's verdict-logic check, finding #5's
+rescore partial-failure case) stay blocked on a live
+`v2.jsonl`/`pilot.jsonl` that still doesn't exist on the repo side.
+
+No PushNotification this fire — no finding invalidates the pilot, and
+per N+25's explicit decision this run is no longer treating pilot-data
+staleness alone as grounds for a re-flag (outside hard rule 3; Lucas has
+direct EC2 visibility this sandbox lacks). Endorsing that call again
+here: nothing changed that would reverse it.
+
+Next Track B pass: if code/data are still unchanged, keep to the plain
+independent re-verify (hashes, pilot-data search, sibling-repo HEAD).
+Next fire: whichever of A/C/D is oldest-touched at that time (Track A,
+14:26:34 09-07, is oldest right now).
