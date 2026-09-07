@@ -712,3 +712,51 @@ Next fire on Track A: rotate query phrasing again; keep the
 pilot-data listing as the standing per-fire checks. Whichever fire is
 active at/after ~2026-09-07 21:00 UTC should re-flag pilot duration once
 more per the standing cadence, regardless of which track it's assigned.
+
+## 2026-09-07 14:2x UTC — Track A fire N+26
+
+Chosen this fire because `L1_LITERATURE.md` was the least-recently-touched
+of the four track files (last write 09-07 06:2x, vs. D 08:27, C 10:25,
+B 12:26 — all UTC on 09-07) — standard rotation, not a special case.
+
+**`remasking_test:research-ideation` HEAD moved** (`dc5b91a` → `f2217c3`,
+Mode B, 13:47 UTC). Not a new paper: the sibling routine used this fire to
+flag the same wait state this file has been tracking and announced it is
+**lightening its own daily proseco check** going forward (cheap 3-question
+check — pilot landed? code hash moved? new finding past #14? — full
+audit-trail re-read only if any of those three flip), explicitly to avoid
+manufacturing busywork entries now that 25+ Track B passes since 08-19/
+08-23 have found nothing new. No `IDEAS.md`/`LANDSCAPE.md` content change
+relevant to L1 literature — the two folded-in items in that commit
+(HumanEval threshold-fragility note, AUC checkpoint-selection-bias note)
+are audit/methodology findings already on file in `L1_AUDIT_FINDINGS.md`
+(#14, #4), not new external papers. Logged here for cross-reference only.
+
+**WebSearch bypass**, rotated phrasing vs. N+22–N+25 ("adaptive corrector
+policy masked diffusion language model remasking learned scheduler"):
+surfaced Attention-Discounted Adaptive Sampler (2606.10829), Learning
+Unmasking Policies / "Apple RL" (2512.09106), NAVIRA (2606.06031),
+Re-evaluating Confidence Remasking (2606.12232), Revise-Don't-Freeze
+(2606.01026) — **all five already logged** in this file and/or
+`LANDSCAPE.md` (2512.09106 alone already cross-referenced at lines 97,
+362, 376, 575, 627 of this file). **No new arxiv ID, no scoop.**
+
+**Pilot data**: `s1/runs/` fresh from this fire's own clone — still the
+same 16 pre-Phase-B files, newest `gsm8k_20260813_045034.jsonl` /
+`humaneval_20260813_045034.jsonl` (2026-08-13), no `phase_b/` dir, no
+`pilot*.jsonl`/`v2.jsonl` anywhere in the tree. ~19.4 days since the Phase
+B code push (185e2ca, 08-19), ~9.9 days (~238h) since the 08-29
+escalation. Per N+23/Track B's math the next re-flag is due ~2026-09-07
+21:00 UTC — **~6.6h from this fire's start, not yet crossed.** No scoop,
+no invalidating audit result, no pilot data landed this fire — none of
+the three hard-rule urgency conditions are met. **No PushNotification
+this fire**; the sibling routine's independent arrival at the same
+"stop manufacturing entries, watch for pilot/code/finding changes only"
+conclusion (see above) is a corroborating signal that this cadence
+decision is correct, not a reason to change it unilaterally without the
+scheduled re-flag.
+
+Next fire on Track A: rotate query phrasing again. Whichever fire is
+active at/after ~2026-09-07 21:00 UTC should re-flag pilot duration once
+more per the standing cadence (now ~10 days stalled, ~10 days since
+escalation), regardless of which track it's assigned.
