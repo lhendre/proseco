@@ -760,3 +760,104 @@ Next fire on Track A: rotate query phrasing again. Whichever fire is
 active at/after ~2026-09-07 21:00 UTC should re-flag pilot duration once
 more per the standing cadence (now ~10 days stalled, ~10 days since
 escalation), regardless of which track it's assigned.
+
+## 2026-09-08 00:2x UTC — Track A fire N+27: two new-to-corpus IDs (Learn2PD/dParallel), neither a scoop; Track C's re-flag-cadence stand-down endorsed
+
+Routed here as oldest-touched track file (Track A's 65a86f0 at 14:26:34
+UTC 09-07, vs. Track D 16:25:44, Track C 20:29:16, Track B 22:25:46 —
+all newer same cycle; the ~10h gap exceeds the 8h all-touched quiet-fire
+threshold, so this is a real routing).
+
+**WebFetch direct to `arxiv.org/list/cs.LG/recent`**: `EGRESS_BLOCKED`,
+unchanged from every prior fire since the proxy allowlist gap was first
+found. **WebSearch bypass**, rotated phrasing vs. every prior Track A
+fire ("2026 discrete diffusion language model learned corrector
+invocation policy per-token confidence gating"): surfaced eight hits —
+The Path Matters/TraceLock (2605.24697, already logged), Revise-Don't-
+Freeze (2606.01026, already logged), Learning Unmasking Policies/"Apple
+RL" (2512.09106, already logged), Generalized Discrete Diffusion with
+Self-Correction/SCDD (2603.02230, already logged), CadLLM (2512.07173,
+already logged), DiffusionGemma commit-order study (2606.14620, already
+logged in both this file's history and `LANDSCAPE.md` line 1171 as
+WATCH-only interpretability, no method), Locally Confident Globally
+Stuck (2604.00375, already logged in `LANDSCAPE.md` line 548 as
+WATCH-only, different axis — exploration-diversity tradeoff, not
+corrector budget) — plus prose mentions of **Learn2PD**, **DCOLT**, and
+**DAPD** without IDs. Grep-checked all eight IDs against this file and a
+fresh `remasking_test:research-ideation` clone (HEAD `f2217c3`,
+unchanged since Track D pass 26/Track B N+26 — no-op): all eight already
+tracked, zero new IDs from this batch.
+
+**Follow-up searches on the three unresolved name-only mentions**
+resolved two to real, genuinely new-to-corpus arxiv IDs (grep-confirmed
+absent from both this file and `LANDSCAPE.md`):
+
+- **2509.25188 | Learn2PD / "Learning to Parallel: Accelerating Diffusion
+  Large Language Models via Adaptive Parallel Decoding"** (ICLR 2026
+  poster, Wenrui Bao, Zhiben Chen, Dan Xu, Yuzhang Shang) — trains a
+  lightweight, post-hoc filter model that predicts per-position whether
+  the current forecast already matches the eventual final token,
+  approximating an oracle parallel-decoding policy; reports up to
+  22.6x speedup (57.5x with KV-cache) with no quality drop on LLaDA.
+  Structurally close to L1's own approach (a small learned classifier
+  consuming diffusion-state signals, trained cheaply post-hoc) but a
+  **different target decision**: Learn2PD decides which still-masked
+  positions are safe to commit *now*, in parallel, on the forward path —
+  a commit-timing/speed decision — not whether to invoke a corrector/
+  remasking sub-loop on tokens *already* committed, which is L1's
+  decision. Same differentiation shape as the already-logged "The Path
+  Matters"/TraceLock entry (2605.24697): sibling mechanism class,
+  opposite side of the commit boundary. Not a scoop, not Gate-8 material.
+  Companion paper **dParallel (2509.26488)** surfaced in the same search
+  batch, same mechanism family (learnable parallel decoding for dLLMs) —
+  logged for completeness only, same differentiation applies, not
+  separately fetched.
+- **2505.10446 | DCoLT / "Reinforcing the Diffusion Chain of Lateral
+  Thought with Diffusion Language Models"** — a May-2025 paper (older
+  than this routine's typical window but still new-to-corpus by ID),
+  trains the base model's reasoning trajectory via outcome-based RL over
+  a Plackett-Luce-model "Unmasking Policy Module" that governs unmask
+  *order*, boosting LLaDA reasoning accuracy up to +19.5% (HumanEval).
+  **Training-time RL for the base denoiser's own generation order**, not
+  an inference-time policy over a separate corrector step — same
+  standing differentiation bucket as DiSPO, Apple RL, DiFFPO (already
+  logged): governs how the base model decodes, not whether a corrector
+  runs on an already-decoded block. Not a scoop, not L1-Gate-8 material.
+- **DAPD**: no resolvable arxiv ID found this fire (search results kept
+  returning DAPD as a training-free dependency-aware *parallel-decoding*
+  method referenced only in secondary summaries, no primary hit with a
+  byline or ID) — left unresolved, flag for a future fire's author/title
+  search if it resurfaces with more context.
+
+Both resolved IDs logged here for the record (both non-Kuleshov, neither
+threatens L1's corrector-invocation framing); not pushed to
+`remasking_test` (out of this routine's repo/branch scope per hard
+rule 2) — Lucas or the sibling routine's own Mode A/F sweep can pick
+them up there if judged worth a LANDSCAPE.md entry.
+
+**Pilot data**: `s1/runs/` re-listed fresh from this fire's own clone —
+still the same 16 pre-Phase-B files, newest `gsm8k_20260813_045034.jsonl`/
+`humaneval_20260813_045034.jsonl` (2026-08-13). No `phase_b/` dir, no
+`pilot*.jsonl`/`v2.jsonl` anywhere in the tree. ~20.2 days since the
+Phase B code push (185e2ca, 08-19), ~10.9 days since the 08-29
+escalation. The ~2026-09-07 21:00 UTC re-flag mark computed by N+23/
+Track B has now passed without a fire crossing it with a PushNotification
+— **by design, not oversight**: Track C's pass 25 (20:2x UTC, 09-07)
+explicitly re-examined that self-derived ~106h cadence against hard
+rule 3's literal text (one PushNotification per fire, *only if urgent* —
+an invalidating audit finding, a competitor scoop, or a feature
+breakthrough) and stood down on the cadence itself, not just that one
+instance, on the reasoning that a "still no output in git" ping tells
+Lucas nothing about his own EC2 job he can't already see directly.
+Track B N+26 independently endorsed the same call. This fire concurs:
+neither Learn2PD/dParallel nor DCoLT rises to "competitor scoop" (both
+are differentiated non-competitors, logged above), so nothing here meets
+the hard-rule bar either. **No PushNotification this fire.**
+
+Next fire on Track A: rotate query phrasing again; if DAPD resurfaces
+with enough context to get an ID, resolve and log it. Standing
+per-fire checks unchanged (`LANDSCAPE.md` HEAD diff + arxiv-ID
+cross-check, `s1/runs` pilot-data listing). The self-derived duration
+re-flag cadence is retired per Track C pass 25/Track B N+26 — future
+fires shouldn't reintroduce it absent a genuine hit on one of the three
+hard-rule-3 conditions.
